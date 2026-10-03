@@ -1,0 +1,1 @@
+"""EndpointCheck configuration validation."""

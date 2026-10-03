@@ -1,0 +1,13 @@
+{
+  "max_workers": 2,
+  "endpoints": [
+    {
+      "name": "local-health",
+      "url": "http://localhost:8000/health?ready=1",
+      "expected_status": 200,
+      "latency_threshold_seconds": 0.5,
+      "connect_timeout_seconds": 1.0,
+      "read_timeout_seconds": 2.0
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "endpointcheck"
+version = "0.1.0"
+description = "API inspector: configuration validation milestone"
+requires-python = ">=3.14"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1", "ruff==0.16.10", "mypy==2.4.0"]
+
+[tool.setuptools.packages.find]
+include = ["endpointcheck*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--basetemp=.pytest_cache/tmp"
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["endpointcheck", "tests"]

@@ -1,36 +1,66 @@
 # EndpointCheck
 
-A planned small Python command-line API health and latency inspector, also used
-as a learning project for an interview about AI-assisted engineering.
+A small Python command-line API inspector and learning project for AI-assisted
+engineering. **Milestone one is implemented:** strict JSON configuration loading,
+validation, immutable typed settings, and a validation-only CLI. HTTP checks,
+concurrency, result reporting, and Docker are not implemented.
 
-**Implementation has not started.** This repository currently contains initial
-documentation only. There is no application, working CLI, test suite, Docker
-setup, or controlled demonstration API. No installation or run commands are
-available yet.
+## Setup (PowerShell, from the repository root)
 
-The agreed product will validate JSON before checking GET endpoints with bounded
-concurrency and report healthy, slow, failed, or timed-out results in configuration
-order. Separate connection and read-inactivity timeouts will not enforce a total
-wall-clock deadline. Version one will target small, finite API responses without
-enforcing a response-size limit.
+Tested with Python 3.14.7. Metadata requires Python >=3.14; other versions have
+not been tested. Runtime validation uses only the standard library.
 
-## Documentation
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+```
 
-- [REQUIREMENTS.md](REQUIREMENTS.md): source of truth for behavior, configuration
-  examples, numbered acceptance criteria, and unresolved product decisions.
-- [ARCHITECTURE.md](ARCHITECTURE.md): accepted component design, proposed
-  dependencies, tradeoffs, milestones, and planned verification.
+The development extra installs tested pytest, Ruff, and mypy versions. Using the
+environment executable avoids shell activation.
+
+## Validate
+
+```powershell
+.\.venv\Scripts\python.exe -m endpointcheck validate examples/config.json
+```
+
+Expected output: `Configuration valid: 1 endpoint(s).` Exit 0 means valid.
+Expected configuration/file/invocation errors print to stderr without a traceback
+and exit 2. Paths resolve from the current working directory; quote paths with
+spaces. With the environment active, use
+`python -m endpointcheck validate CONFIG_PATH`.
+
+Validation reads a UTF-8 file and checks every endpoint before returning settings.
+It does not resolve hostnames or contact endpoints. The sample localhost URL
+requires no running server. See [REQUIREMENTS.md](REQUIREMENTS.md) for the exact
+schema, examples, and acceptance criteria.
+
+## Verify
+
+These commands were run successfully in the project-local environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+.\.venv\Scripts\python.exe -m mypy
+```
+
+pytest temporary files live under ignored `.pytest_cache/tmp`, which pytest owns
+and clears on a run. Strict mypy checks application and tests. Tests include raw
+duplicate-key JSON, field boundaries, whole-config rejection, subprocess CLI
+behavior, and guarded socket/DNS calls. Checks provide evidence, not proof of
+correctness or an exhaustive network audit.
+
+## Documentation and remaining milestones
+
+- [REQUIREMENTS.md](REQUIREMENTS.md): behavior and acceptance criteria.
+- [ARCHITECTURE.md](ARCHITECTURE.md): implemented/planned components and tradeoffs.
 - [AGENTS.md](AGENTS.md): repository working instructions.
-- [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md): AI recommendations, explicit
-  user decisions, and pending verification evidence.
+- [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md): recommendations, explicit user
+  decisions, verification evidence, and limitations.
 
-## Implementation roadmap
-
-1. Configuration validation and a minimal validation CLI.
-2. Single-endpoint checking.
-3. Bounded concurrent orchestration.
-4. Complete CLI reporting.
-5. Docker and a controlled demonstration API.
-
-Each milestone is intended to be a small, independently verified change for human
-review. Usage and verification commands will be documented once they exist.
+Remaining, separately authorized milestones: single-endpoint checking; bounded
+concurrent orchestration; complete CLI reporting; Docker and a controlled
+demonstration API. Future HTTP timeouts will not enforce a total deadline; the
+small/finite-response usage limitation is recorded in requirements.
