@@ -1,6 +1,7 @@
 # EndpointCheck requirements
 
-Status: milestone one implemented; HTTP checking and later milestones are planned.
+Status: validation and single-endpoint checking implemented; orchestration and
+complete reporting remain planned.
 This document is the source of truth for product behavior and acceptance
 criteria. Design belongs in [ARCHITECTURE.md](ARCHITECTURE.md); repository
 working instructions belong in [AGENTS.md](AGENTS.md).
@@ -99,8 +100,20 @@ Classify in this order:
 3. Expected status with elapsed time strictly above the threshold: **slow**.
 4. Otherwise: **healthy**.
 
-Preserve elapsed time and relevant HTTP status codes or errors. Individual
-request failures must not cancel unrelated checks. Workers return results;
+Each check result contains endpoint name and URL, outcome (`healthy`, `slow`,
+`failed`, or `timed out`), elapsed seconds, received HTTP status code or `None`,
+and an informative error when applicable or `None`. Slow/healthy completed
+responses need no error. Unexpected statuses carry an explanatory error.
+
+Preserve a received status even if body consumption later fails or times out.
+For example, a 200 response with a stalled body is timed out with status 200;
+headers alone do not establish success. Consume the complete body without
+retaining it in the result. Close response/network resources on success and
+failure. A checker takes one validated endpoint and returns one result without
+printing, threads, retries, or shared reporting state. Unexpected programming
+errors remain visible rather than becoming request failures.
+
+Individual request failures must not cancel unrelated checks. Workers return results;
 the main thread collects and reports them in configuration order.
 
 ## Numbered acceptance criteria
@@ -135,6 +148,8 @@ the main thread collects and reports them in configuration order.
 10. **AC-10 — Result evidence:** Each attempted check retains its elapsed time
     and relevant status/error evidence. A status mismatch retains the received
     status; a request failure retains an informative error.
+    Preserve the received status after a partial-body failure/timeout; use `None`
+    when no status arrived. A received 200 with incomplete body is not healthy.
 11. **AC-11 — Bounded concurrency and isolation:** Active checks never exceed
     `max_workers`. One failed or timed-out request does not prevent other checks
     from completing and returning results.
@@ -156,14 +171,27 @@ the main thread collects and reports them in configuration order.
 17. **AC-17 — No repair or partial acceptance:** Missing fields do not get
     defaults. A valid first endpoint followed by an invalid second endpoint
     rejects the entire configuration; no settings are returned.
+18. **AC-18 — Single check and cleanup:** Given one validated endpoint, return
+    the result contract above. Consume the whole body and close response/session
+    resources on success or failure, without retaining body data in the result.
+    Do not print, retry, start threads, or suppress unexpected programming errors.
+19. **AC-19 — Timeout evidence:** Delayed headers time out with status `None`;
+    received 200 headers followed by a stalled body time out with status 200.
+    A refused connection is failed, not timed out. An incomplete download is
+    failed with its received status. Identify actual timeout types rather than
+    treating every connection failure as a timeout.
+20. **AC-20 — Body timing:** Include complete body consumption in elapsed time.
+    Regularly arriving data may allow a completed slow response whose total time
+    exceeds the read-inactivity timeout. Verify strict threshold equality with
+    a controlled monotonic clock rather than real-time equality assertions.
 
 ## Decisions still pending
 
 - Complete inspector CLI output format, summaries, and health-related exit codes.
 - Whether future URL validation needs stricter hostname/percent-escape rules
   beyond the current structural parser checks; no DNS validation is intended.
-- Which evidence to retain when an exception occurs after response headers
-  arrive, and how errors are represented in results and reports.
+- Display format for result errors; the checker currently returns exception type
+  and message (or an expected/received-status explanation) as a string.
 - Docker/demo scenarios, startup/readiness behavior, and acceptance criteria.
 
 Resolve these here before implementing dependent behavior. Do not infer approval

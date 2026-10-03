@@ -1,14 +1,14 @@
 # EndpointCheck
 
 A small Python command-line API inspector and learning project for AI-assisted
-engineering. **Milestone one is implemented:** strict JSON configuration loading,
-validation, immutable typed settings, and a validation-only CLI. HTTP checks,
-concurrency, result reporting, and Docker are not implemented.
+engineering. **Milestones one and two are implemented:** strict JSON validation,
+immutable settings, a validation-only CLI, and a single-endpoint GET checker.
+Concurrency, a checking CLI, report formatting, and Docker are not implemented.
 
 ## Setup (PowerShell, from the repository root)
 
 Tested with Python 3.14.7. Metadata requires Python >=3.14; other versions have
-not been tested. Runtime validation uses only the standard library.
+not been tested. Validation uses only the standard library; checking uses requests.
 
 ```powershell
 python -m venv .venv
@@ -52,6 +52,25 @@ duplicate-key JSON, field boundaries, whole-config rejection, subprocess CLI
 behavior, and guarded socket/DNS calls. Checks provide evidence, not proof of
 correctness or an exhaustive network audit.
 
+Checker tests use a controlled loopback server with clean fixture shutdown:
+statuses, redirects, delayed headers/body, incomplete downloads, refusal, and
+regularly arriving data. Connection timeout is simulated; exact latency equality
+uses a controlled clock. No public endpoint is needed.
+
+## Single-endpoint checker (Python API)
+
+`endpointcheck.checker.check_endpoint(endpoint)` takes one validated
+`EndpointSettings` and returns a `CheckResult` containing name, URL, outcome,
+elapsed seconds, optional status, and optional error. It does not print or retry.
+The existing validation CLI remains unchanged; there is no checking command yet.
+
+The checker streams the complete body and closes response/session resources,
+including after a body error. A received status is preserved even when body
+consumption fails. Separate connection/read-inactivity timeouts are not a total
+deadline: regularly arriving data can finish slowly without a read timeout.
+Elapsed time includes the whole body, using a monotonic clock. Small finite API
+responses remain the intended use, without an enforced size/duration cap.
+
 ## Documentation and remaining milestones
 
 - [REQUIREMENTS.md](REQUIREMENTS.md): behavior and acceptance criteria.
@@ -60,7 +79,7 @@ correctness or an exhaustive network audit.
 - [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md): recommendations, explicit user
   decisions, verification evidence, and limitations.
 
-Remaining, separately authorized milestones: single-endpoint checking; bounded
+Remaining, separately authorized milestones: bounded
 concurrent orchestration; complete CLI reporting; Docker and a controlled
 demonstration API. Future HTTP timeouts will not enforce a total deadline; the
 small/finite-response usage limitation is recorded in requirements.

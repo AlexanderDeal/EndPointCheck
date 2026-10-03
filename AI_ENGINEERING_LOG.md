@@ -170,6 +170,113 @@ the five updated documents, and commit with
 milestone two. This review supersedes the pending-review status in the previous
 historical entry.
 
+## 2026-10-03 — Milestone two: single-endpoint HTTP checking
+
+**Prompt and authorized scope:** Implement only a checker accepting one validated
+endpoint and returning name, URL, outcome, elapsed seconds, optional status, and
+optional informative error. Preserve status after partial-body failure; headers
+alone do not establish success. Use requests, disabled redirects, separate
+connection/read-inactivity limits, monotonic full-body timing, complete body
+consumption without retaining the body in results, and cleanup on all paths.
+No printing, threads, retries, shared reports, checking CLI, Docker, commit, or
+push. Preserve milestone one. Run the full required checks and document evidence.
+Human review of milestone two has not occurred.
+
+**Explicit user decisions:** Result evidence, timing/resource behavior,
+classification precedence, visible unexpected programming errors, and required
+controlled-server cases (including body stalls, refusal, incomplete download,
+redirect target avoidance, and regularly arriving data). Simulate connection
+timeout; use a controlled clock for equality. Requirements now include AC-18–20
+and the partial-body evidence addition to AC-10.
+
+**AI choices and rationale:** Frozen `CheckResult` in `checker.py`, one local
+Session per check, 64-KiB streaming chunks discarded after reading, and a local
+response hook for status capture and complete consumption. The hook prevents
+requests' redirect preparation from consuming a body and handling failures before
+the checker sees them. End time is captured immediately on consumption completion
+or on a request exception; cleanup is outside the measurement. Catch only
+`requests.RequestException`; programming errors propagate through cleanup.
+Errors are exception type plus message, or an expected/received-status explanation.
+
+**Dependency and exception evidence:** Installed requests 2.34.2, urllib3 2.8.0,
+and types-requests 2.33.0.20260906 in `.venv`. Pin requests and urllib3 at runtime;
+urllib3 is explicit because the checker imports its exception type. The stubs
+are a development dependency. Inspected installed `Response.iter_content`,
+`Session.send`, and `Session.resolve_redirects` with `inspect.getsource` and
+consulted official requests source documentation. `iter_content` raises
+`ConnectionError(ReadTimeoutError(...))` for a streamed read timeout; a delayed
+header raises `ReadTimeout`. Independent real-library tests assert both shapes.
+The mapper checks `requests.Timeout` or the typed `ReadTimeoutError` argument
+of `requests.ConnectionError`, not message strings or all connection errors.
+
+**Changes:** Added `endpointcheck/checker.py` and `tests/test_checker.py`.
+Updated runtime/stub metadata, requirements, architecture, README, and this log.
+Config parsing and validation CLI source/tests are unchanged. Test-only server
+threads provide controlled HTTP responses; application code starts no threads.
+Server fixtures signal stalled handlers to finish, shut down/close the server,
+join the thread, and assert termination. Loopback proxy exclusion is test-local.
+
+**Actual commands and final outcomes:**
+
+| Command | Outcome |
+| --- | --- |
+| `.\.venv\Scripts\python.exe -m pip install requests types-requests` | Installed successfully with approved network access |
+| `.\.venv\Scripts\python.exe -m pip install -e ".[dev]"` | Editable installation succeeded with updated metadata |
+| `.\.venv\Scripts\python.exe -m pytest` | 171 passed in 6.23 seconds (146 existing + 25 new cases) |
+| `.\.venv\Scripts\python.exe -m ruff check .` | All checks passed |
+| `.\.venv\Scripts\python.exe -m ruff format --check .` | 13 files already formatted |
+| `.\.venv\Scripts\python.exe -m mypy` | No issues in 8 source files, strict mode |
+| `git diff --check` | No whitespace errors |
+
+**Intermediate corrections:** Ruff removed an unused import and formatting was
+applied. mypy required narrowing the default adapter to `HTTPAdapter` in the
+no-retries test. The first full run had 167 passes and a refusal-case failure:
+Windows had not reported refusal before the 0.4-second connection limit. Raised
+that test's allowance to five seconds; observed refusal in about two seconds.
+Added broken/stalled redirect bodies and consumption in the response hook so
+redirect preprocessing cannot obscure body failure. Added session/response
+cleanup assertions, including visible programming errors during body consumption.
+Final checks above passed after these changes.
+
+**Verification scope:** Controlled loopback cases cover fast/slow complete
+responses, unexpected status before latency classification, direct redirects
+(including expected 302), delayed headers, partial-body stalls, incomplete bodies,
+refusal, full-body timing, and trickling data taking longer than the inactivity
+limit. Controlled clock tests check below/equal/above threshold. A focused fake
+raises `ConnectTimeout` and checks timeout tuple/redirect/stream flags and default
+zero retries. Real-network tests use separated timing margins. No public
+unreachable-host timeout assumption is used. AC-07–10 and AC-18–20 are exercised
+for a single check; queue timing, bounded concurrency, collection/report order,
+and unrelated-check isolation remain for later milestones.
+
+**Limitations and assumptions:** Tested on Windows/Python 3.14.7 with these pinned
+libraries; exception shapes must be revisited on upgrades. Standard requests
+proxy/environment, certificate checking, and decompression remain enabled.
+TLS/proxy/internet scenarios are not tested. DNS/connect behavior is not a total
+deadline, and regularly arriving data may continue indefinitely. No body-size or
+total-duration cap is added. Timing includes requests preparation and decoded
+body consumption, but excludes session construction and cleanup. Very large
+accepted numeric configuration values may exceed transport limits; this milestone
+does not change validation or silently coerce them. Tests/source inspection
+provide evidence, not proof of correctness. Full reports/exit codes, concurrency,
+and Docker demonstration rules remain unresolved/planned. Milestone-two human
+review is pending; no commit or push was performed.
+
+## 2026-10-03 — Independent milestone-two review and commit
+
+**User-reported independent evidence:** Milestone two passed independent source
+and test review. Independent verification reported 171 tests passed, Ruff lint
+and format checks passed, strict mypy passed, and `git diff --check` passed.
+No blocking issues were identified. TLS/proxy behavior remains untested.
+These findings provide evidence, not exhaustive correctness. This entry does
+not claim the AI performed the independent review or that the user understands
+every implementation detail. The review supersedes the pending-review status
+in the preceding historical entry.
+
+**Authorization:** Review and stage only milestone-two changes and commit with
+`feat: add single-endpoint HTTP health checks`. Do not push or begin milestone
+three.
+
 ## Future entry outline
 
 - Objective and authorized milestone.
