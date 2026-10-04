@@ -1,7 +1,7 @@
 # Proposed architecture
 
 Status: configuration, validation CLI, single-endpoint checking, and bounded
-orchestration implemented. Complete CLI reporting and Docker remain planned.
+orchestration implemented, with checking CLI and reports. Docker remains planned.
 Product behavior and acceptance criteria are defined in
 [REQUIREMENTS.md](REQUIREMENTS.md). This document describes design choices, not
 additional product rules.
@@ -13,10 +13,29 @@ additional product rules.
 | `config.py` (implemented) | Load strict JSON, validate the complete configuration, and produce immutable typed settings. |
 | `checker.py` (implemented) | Perform one GET, consume the body, measure elapsed time, and return status/error evidence and outcome. |
 | `runner.py` (implemented) | Submit all checks to a bounded thread pool, collect completed futures on the caller thread, and return configuration-order results. |
-| `cli.py` (validation implemented) | Validate a configuration; checking/reporting remain planned. |
+| `cli.py` (implemented) | Parse validation/check commands, load configuration first, invoke the runner, print completed reports, and return approved exit codes. |
+| `reporting.py` (implemented helper) | Pure plain-text formatting and safe display of untrusted fields. |
 
 Flow: CLI → complete configuration validation → runner → checker workers →
 main-thread collection → CLI report. Milestone 1 stops after validation.
+
+Both module invocation and the installed `endpointcheck` console script call
+`cli.main`. Project metadata's script entry creates the launcher on installation;
+it was recreated and tested in `.venv`. `validate` returns before calling the
+runner. `check` loads the entire file first, then calls the existing runner on
+the main thread, formats its ordered results, and chooses exit 0/1 from existing
+outcomes. Configuration/file errors alone are caught as user errors (exit 2);
+argparse handles invocation errors. Programming exceptions are not caught.
+
+`reporting.format_report` accepts a sequence of results and returns text without
+printing or mutation. It preserves sequence order, formats elapsed seconds to
+three decimals, renders missing status as `unavailable`, includes applicable
+errors, and emits all four summary counts. Classification is never recomputed
+from rounded text. `safe_display` uses printable-character checks and Python
+backslash escapes for controls, nonprintable Unicode characters, and literal
+backslashes. Ordinary printable Unicode remains readable. Expected input errors
+and argparse error messages use the same escaping; help uses a fixed program name.
+This helper keeps formatting concerns out of workers and the runner.
 
 Frozen dataclasses and an endpoint tuple hold validated configuration. The parser
 uses JSON hooks to reject duplicate keys/constants before field validation;
@@ -124,7 +143,8 @@ finite-response usage limitation; there is no enforced response-size cap.
 | 5. Docker and a controlled demonstration API | Container execution and repeatable demonstration scenarios. | Approved scenarios through container networking, including readiness and inspector process outcomes. |
 
 Milestones one through three have verification recorded in the engineering log;
-milestones four and five remain pending. Real timing tests should use generous
+milestone four adds installed/module subprocess verification and formatting tests;
+milestone five remains pending. Real timing tests should use generous
 margins; exact threshold equality should use controlled clock inputs. Avoid
 unreliable public endpoints or assumptions that an unreachable address will
 consistently trigger a connection timeout.
@@ -147,6 +167,16 @@ deterministic boundary check, not a real-world queue-latency benchmark.
 Fixture waits are bounded; shutdown signals handlers, joins non-daemon handler
 threads, and asserts the server thread ended. Passing tests are evidence, not
 exhaustive scheduling or network correctness.
+
+Milestone-four subprocess tests invoke both entry points from a temporary working
+directory against a controlled loopback server. They observe exit codes, streams,
+order, evidence, counts, zero requests after input rejection (including a later
+invalid endpoint), and network-free validation. They also verify status retention
+for stalled/incomplete bodies, unavailable status, and safe name display.
+Synthetic results test exact errors/URL control escaping and rounded display
+without outcome changes. Entry-point comparison ignores real measured durations.
+Server observations cover received HTTP requests, not an exhaustive network audit.
+Fixtures reuse the bounded single-endpoint test server and join its thread.
 
 The validator imports file/JSON/type utilities and a URL syntax parser, with no
 HTTP client, socket invocation, DNS lookup, or request execution path. A test

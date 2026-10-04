@@ -68,7 +68,7 @@ def test_unreadable_cli(tmp_path: Path, kind: str) -> None:
     [
         [],
         ["validate"],
-        ["check", "config.json"],
+        ["unknown", "config.json"],
         ["validate", "config.json", "extra"],
         ["--unknown"],
     ],

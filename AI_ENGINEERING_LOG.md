@@ -387,6 +387,120 @@ forced cancellation. Independent review does not remove these limitations.
 with `feat: add bounded concurrent endpoint checks`. Do not push or begin
 milestone four.
 
+## 2026-10-04 — Milestone four: checking CLI, reports, and installed command
+
+**Prompt and authorization:** Read instructions/requirements/design; preserve
+validator, checker, and runner behavior. Add installed `endpointcheck validate`
+and `endpointcheck check`, retaining equivalent module commands. Create a
+project.scripts entry to the existing main function and actually reinstall.
+Checking must validate before running, report in configuration order, return
+0 for all healthy, 1 for any completed nonhealthy result, and 2 for expected
+input/file/invocation errors. Programming exceptions stay visible. Agree/report
+the supplied plain-text evidence/counts/safe-display contract in requirements
+before implementation. Add subprocess tests for both entry points and bounded
+server observations, run all checks, and update documentation. No Docker,
+retries, JSON output, new dependencies, commit, or push. Stop for review.
+
+**Explicit user decisions:** Command names and equivalent entry points; whole-file
+validation before runner invocation; ordered reports, health exit codes, output
+streams, preserved status/error evidence, zero body output, four summary counts
+including zeros, control escaping in names/URLs/errors, and classification from
+the existing unrounded result. Requirements were updated before code changes
+with this contract and AC-21–25.
+
+**AI design choices:** A focused pure `reporting.py` formats blocks and a summary,
+with `unavailable` for absent status and seconds rounded to three decimals.
+Printable characters remain readable; nonprintable Unicode/terminal controls
+use visible Python backslash escapes, with literal backslashes escaped to avoid
+ambiguity. The small argparse subclass sanitizes invocation error messages;
+expected configuration/file errors are sanitized too. Only loading errors are
+caught as expected user errors. The CLI invokes the unchanged runner on the main
+thread and decides exit 0/1 from outcomes, never formatted times. The existing
+main function is shared by module invocation and project.scripts.
+
+**Changes:** Updated `cli.py`, `pyproject.toml`, requirements, architecture,
+README, and this log; added `reporting.py`, `test_reporting.py`, and
+`test_check_cli.py`. Adjusted the old invalid-subcommand fixture from `check` to
+`unknown` now that check is legitimate. Validator/checker/runner source is
+unchanged; no runtime/development dependencies were added.
+
+**Actual setup and manual verification:**
+
+| Command | Outcome |
+| --- | --- |
+| `.\.venv\Scripts\python.exe -m pip install -e ".[dev]"` | Reinstalled successfully with approved access for isolated build tooling |
+| `.\.venv\Scripts\endpointcheck.exe --help` | Exit 0; both validate and check listed |
+| `.\.venv\Scripts\endpointcheck.exe validate examples/config.json` | Exit 0; `Configuration valid: 1 endpoint(s).` |
+| `.\.venv\Scripts\python.exe -m endpointcheck validate examples/config.json` | Same success output and exit 0 |
+
+Verified the installed `.venv/Scripts/endpointcheck.exe` exists. Checking commands
+were exercised by subprocess tests using actual generated configuration paths
+and controlled localhost URLs, rather than assuming a demonstration API exists
+at the README sample's port 8000.
+
+**Final verification commands/outcomes:**
+
+| Command | Outcome |
+| --- | --- |
+| `.\.venv\Scripts\python.exe -m pytest` | 224 passed in 20.23 seconds (181 previous cases plus 43 new cases) |
+| `.\.venv\Scripts\python.exe -m ruff check .` | All checks passed |
+| `.\.venv\Scripts\python.exe -m ruff format --check .` | 18 files already formatted |
+| `.\.venv\Scripts\python.exe -m mypy` | No issues in 13 source files, strict mode |
+| `git diff --check` | No whitespace errors |
+
+**Corrections:** Initial mypy check identified that argparse's `error` override
+must return `Never`, not `None`; corrected its annotation. Applied formatting
+with Ruff. Focused reporting/checking subprocess tests passed, then added further
+body-failure and control-containing invocation cases before the final full run.
+
+**Evidence and acceptance coverage:** Both launcher and module subprocesses run
+from temporary working directories outside the repository root, using the
+editable installation. Assertions verify all-healthy/mixed runs, exit 0/1/2,
+stdout/stderr, endpoint order/details, received 200 after stalled/broken body,
+unavailable status before headers, all four summary counts including zeros,
+safe control-containing names, and no response-body output. Invalid JSON,
+boolean worker limits, and an invalid later endpoint yield no report and zero
+received test-server requests. Validation also yields zero received requests.
+Existing guarded validator tests still pass. Help/error behavior is compared
+exactly between entry points; real checking output comparison ignores independent
+measured durations. Synthetic results independently specify exact report output,
+error/URL/control escaping, and a slow 0.50001-second result displayed as 0.500
+but still exiting 1. A simulated programming bug propagates without a report.
+This addresses AC-21–25 and completes the CLI-reporting portion of AC-12.
+
+**Limits and assumptions:** Server counters observe received HTTP requests, not
+all DNS/socket activity; combined source review and existing guarded tests support
+network-free validation without claiming an exhaustive audit. URL controls are
+already invalid configuration; formatter URL safety is tested with synthetic
+results. Test subprocesses explicitly select UTF-8; unusual host console encodings
+are not comprehensively tested. Safe display is not redaction: URLs/error messages
+may include query data. The existing small finite-response assumption, no total
+deadline/cancellation guarantee, and untested TLS/proxy scenarios still apply.
+Only Windows/Python 3.14.7 and the existing pinned dependencies were verified.
+Passing tests/types/lint are evidence, not exhaustive correctness. Human review
+of milestone four is pending. Docker/demo scenarios and stricter exotic URL
+syntax decisions remain deferred. No commit or push was performed.
+
+## 2026-10-04 — Independent milestone-four review and commit
+
+**User-reported independent evidence:** Milestone four passed independent source
+and test review. Independent checks reported 224 tests passed, Ruff lint and
+format checks passed, strict mypy passed, and `git diff --check` passed. No
+blocking issues were identified. This records the user's evidence, not an
+AI-performed independent review or exhaustive correctness. It supersedes the
+pending-review status in the preceding historical entry.
+
+**Continuing limitations:** TLS/proxy behavior remains untested. Test subprocesses
+select UTF-8; unusual console encodings remain incompletely verified. Server
+observations and the passing checks do not exhaust all inputs, terminal behavior,
+or network paths. The existing timeout and executor shutdown limitations remain.
+
+**Authorization and staging scope:** Commit only milestone-four source, tests,
+metadata, and documentation changes with
+`feat: add checking CLI and readable health reports`. Leave the newly observed
+untracked `examples/manual-invalid.json` outside this commit. Do not push or begin
+milestone five.
+
 ## Future entry outline
 
 - Objective and authorized milestone.

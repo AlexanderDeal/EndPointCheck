@@ -1,10 +1,9 @@
 # EndpointCheck
 
 A small Python command-line API inspector and learning project for AI-assisted
-engineering. **Milestones one through three are implemented:** strict JSON
-validation, immutable settings, a validation-only CLI, single-endpoint GET
-checking, and bounded concurrent orchestration. A checking CLI, report formatting,
-and Docker are not implemented.
+engineering. **Milestones one through four are implemented:** strict validation,
+single-endpoint GET checking, bounded orchestration, and an installed CLI with
+plain-text reports and health-based exit codes. Docker is not implemented.
 
 ## Setup (PowerShell, from the repository root)
 
@@ -19,10 +18,14 @@ python -m venv .venv
 The development extra installs tested pytest, Ruff, and mypy versions. Using the
 environment executable avoids shell activation.
 
+Installation also creates `.venv\Scripts\endpointcheck.exe`. With the environment
+active, use `endpointcheck` directly. Reinstall after project metadata changes.
+
 ## Validate
 
 ```powershell
 .\.venv\Scripts\python.exe -m endpointcheck validate examples/config.json
+.\.venv\Scripts\endpointcheck.exe validate examples/config.json
 ```
 
 Expected output: `Configuration valid: 1 endpoint(s).` Exit 0 means valid.
@@ -35,6 +38,40 @@ Validation reads a UTF-8 file and checks every endpoint before returning setting
 It does not resolve hostnames or contact endpoints. The sample localhost URL
 requires no running server. See [REQUIREMENTS.md](REQUIREMENTS.md) for the exact
 schema, examples, and acceptance criteria.
+
+## Check and report
+
+```powershell
+.\.venv\Scripts\endpointcheck.exe check CONFIG_PATH
+.\.venv\Scripts\python.exe -m endpointcheck check CONFIG_PATH
+.\.venv\Scripts\endpointcheck.exe --help
+```
+
+Both entry points were verified against controlled local HTTP configurations.
+Replace `CONFIG_PATH` with your JSON file. The sample config targets localhost
+port 8000; checking it requires your own API there (validation does not).
+
+Checks validate the whole file before sending requests and print a completed
+report on stdout in configuration order. Exit 0 means all healthy; exit 1 means
+at least one slow/failed/timed-out result. Input/file/invocation errors use stderr
+and exit 2. Unexpected programming errors remain visible.
+
+Illustrative report; actual measured durations vary:
+
+```text
+local-health [healthy]
+  URL: http://localhost:8000/health
+  HTTP status: 200
+  Elapsed: 0.012 s
+
+Summary: healthy=1, slow=0, failed=0, timed out=0
+```
+
+Unavailable statuses display `unavailable`; errors are included when present.
+Summary counts always include all four outcomes. Display time is rounded to
+three decimals; classification uses the existing unrounded result. Names, URLs,
+and errors escape nonprintable characters and literal backslashes; body content
+is not printed. Reports use no color, JSON output, or new dependencies.
 
 ## Verify
 
@@ -63,12 +100,17 @@ counters, plus simulated checks and synchronization events for worker limits,
 overlap, ordering, failure isolation, and queue-time exclusion. Server counters
 observe request handlers rather than all client activity stages.
 
+Reporting tests cover exact output, safe display, and rounding without changing
+outcomes. Subprocess tests run the actual installed launcher and module entry
+point from outside the repository root, compare behavior (excluding measured
+durations), and observe zero server requests for invalid files and validation.
+
 ## Single-endpoint checker (Python API)
 
 `endpointcheck.checker.check_endpoint(endpoint)` takes one validated
 `EndpointSettings` and returns a `CheckResult` containing name, URL, outcome,
 elapsed seconds, optional status, and optional error. It does not print or retry.
-The existing validation CLI remains unchanged; there is no checking command yet.
+The checking CLI calls the existing runner; validation remains network-free.
 
 The checker streams the complete body and closes response/session resources,
 including after a body error. A received status is preserved even when body
@@ -99,6 +141,6 @@ count. The validation CLI still performs no HTTP checks.
 - [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md): recommendations, explicit user
   decisions, verification evidence, and limitations.
 
-Remaining, separately authorized milestones: complete CLI reporting; Docker and a controlled
-demonstration API. Future HTTP timeouts will not enforce a total deadline; the
+Remaining milestone: Docker and a controlled demonstration API. HTTP timeouts
+do not enforce a total deadline; the
 small/finite-response usage limitation is recorded in requirements.

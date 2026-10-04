@@ -5,9 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "endpointcheck"
 version = "0.1.0"
-description = "API inspector: validation and single-endpoint checking"
+description = "Command-line API health and latency inspector"
 requires-python = ">=3.14"
 dependencies = ["requests==2.34.2", "urllib3==2.8.0"]
+
+[project.scripts]
+endpointcheck = "endpointcheck.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest==9.1.1", "ruff==0.16.10", "mypy==2.4.0", "types-requests==2.33.0.20260906"]

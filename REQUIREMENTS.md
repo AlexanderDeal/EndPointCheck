@@ -1,7 +1,7 @@
 # EndpointCheck requirements
 
-Status: validation and single-endpoint checking implemented; orchestration and
-complete reporting remain planned.
+Status: validation, single-endpoint checking, orchestration, and checking CLI/
+reports implemented. Docker remains planned.
 This document is the source of truth for product behavior and acceptance
 criteria. Design belongs in [ARCHITECTURE.md](ARCHITECTURE.md); repository
 working instructions belong in [AGENTS.md](AGENTS.md).
@@ -59,6 +59,46 @@ endpoints. Relative paths resolve from the current working directory.
 - Invalid configuration, unreadable file, or invocation error: exit 2,
   understandable stderr error without a traceback, and no success output.
 - Standard `--help` behavior: display help and exit 0.
+
+## Checking CLI and reporting contract
+
+Installed commands are `endpointcheck validate CONFIG_PATH` and
+`endpointcheck check CONFIG_PATH`, with equivalent `python -m endpointcheck`
+subcommands. Help lists both commands. The installed launcher is generated from
+the existing CLI `main` function by project metadata.
+
+Checking validates the entire configuration before invoking the existing runner.
+Completed checks are reported on stdout in configuration order. Input/file/
+invocation errors go to stderr without a traceback and exit 2. Unexpected
+programming exceptions remain visible, not disguised as endpoint outcomes.
+
+- Exit 0 when every endpoint is healthy.
+- Exit 1 when completed checks contain any slow, failed, or timed-out result.
+- Validation retains its existing exit codes and network-free behavior.
+
+Reports use readable plain text without color. Each endpoint displays its name,
+URL, classification, received HTTP status or the literal `unavailable`, elapsed
+seconds, and an error when present. Response bodies are neither retained in
+results nor printed. A final summary includes counts for healthy, slow, failed,
+and timed out, including zeros.
+
+Display elapsed seconds to three decimal places with an explicit seconds unit.
+Classification and exit decisions use existing outcomes computed from unrounded
+time, never the displayed value. Escape embedded line breaks and terminal control
+characters in names, URLs, and errors as visible backslash escapes. Escape literal
+backslashes too so escaped controls are distinguishable from literal text.
+Preserve ordinary printable characters. Formatting does not modify result values.
+
+Example report layout (illustrative duration):
+
+```text
+local-health [healthy]
+  URL: http://localhost:8000/health
+  HTTP status: 200
+  Elapsed: 0.012 s
+
+Summary: healthy=1, slow=0, failed=0, timed out=0
+```
 
 Reject missing or unknown fields and incorrect types at either object level.
 Booleans are not numbers or integers for this contract. Do not require any
@@ -184,14 +224,31 @@ the main thread collects and reports them in configuration order.
     Regularly arriving data may allow a completed slow response whose total time
     exceeds the read-inactivity timeout. Verify strict threshold equality with
     a controlled monotonic clock rather than real-time equality assertions.
+21. **AC-21 — Checking command and exit codes:** Both entry points support
+    validation and checking. All-healthy checks exit 0; any completed nonhealthy
+    outcome exits 1. Invalid input/file/invocation exits 2 on stderr. An invalid
+    later endpoint causes zero requests and no report, even if earlier entries
+    are valid. Programming exceptions remain visible.
+22. **AC-22 — Report evidence and order:** Display each endpoint's name, URL,
+    outcome, elapsed seconds, available status or `unavailable`, and applicable
+    error in configuration order. A body timeout after 200 headers displays
+    status 200 and the timeout error. Do not print response bodies.
+23. **AC-23 — Summary and precision:** Always include all four counts, including
+    zeros. A slow result just above a 0.5-second threshold remains slow and exits
+    1 even when displayed as `0.500 s`.
+24. **AC-24 — Safe display:** Names/errors containing newline, carriage return,
+    tab, escape, C1 controls, or other nonprintable characters display visible
+    escapes rather than injecting lines or terminal actions. Apply the same
+    escaping to URLs; do not change underlying values or outcomes.
+25. **AC-25 — Installed entry point:** Reinstall the project to create its actual
+    launcher and test it alongside module invocation for command/help/errors and
+    real checking. Equivalent reports retain the same structural evidence, but
+    independently measured HTTP durations need not match exactly.
 
 ## Decisions still pending
 
-- Complete inspector CLI output format, summaries, and health-related exit codes.
 - Whether future URL validation needs stricter hostname/percent-escape rules
   beyond the current structural parser checks; no DNS validation is intended.
-- Display format for result errors; the checker currently returns exception type
-  and message (or an expected/received-status explanation) as a string.
 - Docker/demo scenarios, startup/readiness behavior, and acceptance criteria.
 
 Resolve these here before implementing dependent behavior. Do not infer approval
