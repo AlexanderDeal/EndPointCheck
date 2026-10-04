@@ -277,6 +277,116 @@ in the preceding historical entry.
 `feat: add single-endpoint HTTP health checks`. Do not push or begin milestone
 three.
 
+## 2026-10-03 — Milestone three: bounded concurrent orchestration
+
+**Prompt and authorized scope:** Read repository instructions/design, preserve
+configuration and checker behavior, and implement only a small runner taking
+validated Settings. Submit every endpoint to ThreadPoolExecutor with max_workers;
+let queued checks start as workers free up; collect on the main thread and return
+configuration order. Ordinary failed/timed-out results must not cancel other
+checks. Programming exceptions stay visible; shutdown can wait, without total
+deadline or forced cancellation. No load balancer, retries, checking CLI,
+report formatting, Docker, commit, or push. Update architecture, README, and
+this log; requirements need no behavior changes for this implementation.
+
+**AI implementation choices:** `run_checks` is one function. It maps each
+submitted future to its endpoint position, collects values via `as_completed`
+on the calling thread, and restores order by index. The intended caller is the
+main thread; there is no enforced thread-identity check. Workers return existing
+CheckResult objects without printing or sharing a report. All checks are submitted
+up front to keep the design small. There is no new dependency or modification
+to config, checker, CLI, or their existing tests.
+
+**Changes:** Added `endpointcheck/runner.py` and `tests/test_runner.py`; updated
+architecture, README, and this log. No application work beyond milestone three.
+Requirements behavior remains unchanged (AC-08 queue exclusion, AC-11 bounded
+concurrency/isolation, and AC-12 caller collection/order already apply). Full CLI
+reporting remains deferred, so AC-12's reporting portion is not yet implemented.
+
+**Independent observations in tests:**
+
+- Real concurrent loopback server counts active handlers and records its maximum
+  under a lock. Seven checks run with each of 1, 2, and 3 workers. Assertions
+  check the upper bound and actual overlap when workers >1; one worker gives a
+  maximum of one. Final-byte delivery and decrement share the counting lock to
+  avoid handler-tail bookkeeping creating artificial overlap.
+- Simulated check counters and a bounded barrier observe entire check-call
+  concurrency; maximum equals the worker limit. With one worker, start and finish
+  records both match configuration order.
+- Events hold the first check until a queued third check starts and finishes.
+  Recorded completion order is second/third/first, while results return
+  first/second/third. Worker identities differ from the main thread; an iterator
+  spy records collection on the main thread. No output is produced.
+- A real single-worker run returns failed/timed-out/healthy/healthy, preserving
+  received statuses, names, and exactly one result per endpoint. Good checks run
+  after the ordinary failures rather than being cancelled.
+- A simulated RuntimeError propagates rather than yielding a fake result; queued
+  work completes during executor shutdown, and worker threads are no longer alive
+  after propagation.
+- A first simulated check occupies the only worker. Once both futures are
+  submitted, an event-controlled helper advances a fake monotonic clock by 100
+  seconds before release. The queued check uses the actual HTTP checker/server,
+  and records only 0.25 elapsed seconds. This verifies the measurement boundary
+  without fragile wall-clock queue timing.
+- Test-server event waits and socket writes are bounded; teardown signals waits,
+  shuts down the server, joins non-daemon handlers and the server thread, and
+  asserts zero active handlers and no surviving server thread. Controller threads
+  are also joined; simulation waits/barriers have explicit timeout bounds.
+
+**Actual final verification:**
+
+| Command | Outcome |
+| --- | --- |
+| `.\.venv\Scripts\python.exe -m pytest` | 181 passed in 6.78 seconds (171 existing + 10 runner cases) |
+| `.\.venv\Scripts\python.exe -m ruff check .` | All checks passed |
+| `.\.venv\Scripts\python.exe -m ruff format --check .` | 15 files already formatted |
+| `.\.venv\Scripts\python.exe -m mypy` | No issues in 10 source files, strict mode |
+| `git diff --check` | No whitespace errors |
+
+**Intermediate corrections:** Ruff removed an unused import; formatting applied
+with `ruff format .`. Initial strict mypy identified test references to imported
+runner attributes that were not explicitly exported; tests now reference the
+original checker/as_completed imports while patching runner lookups. Focused
+runner tests passed (10 cases). Strengthened queue-time synchronization to require
+both submissions before releasing the first worker, and serialized server final
+byte/count decrement to remove counter-tail ambiguity. All final checks passed
+after these refinements.
+
+**Limitations and pending decisions:** Server request counts measure handler
+activity, not DNS, TCP setup, all client-side computation, or cleanup. Simulated
+whole-check counters complement this observation; neither exhausts scheduler
+behavior. Queue exclusion uses a controlled clock, not a performance benchmark.
+Caller-thread collection assumes application calls from the main thread. The
+executor bounds active checks but all futures are queued at once (O(endpoint
+count) storage). Programming errors may surface only after shutdown waits for
+running/queued checks; no full result list is promised in that case. No total
+deadline/cancellation is added; indefinitely arriving data can occupy a worker
+and delay shutdown. TLS/proxy behavior remains untested, and verification is on
+the existing Windows/Python 3.14.7 environment. Passing checks provide evidence,
+not exhaustive correctness. Human review of milestone three is pending.
+Complete CLI reporting/exit codes and Docker/demo behavior remain for later
+milestones. No commit or push was performed.
+
+## 2026-10-03 — Independent milestone-three review and commit
+
+**User-reported independent evidence:** Milestone three passed independent source
+and test review. Independent checks reported 181 tests passed, Ruff lint and
+format checks passed, strict mypy passed, and `git diff --check` passed. No
+blocking issues were identified. This records the user's reported review rather
+than claiming the AI performed it. It supersedes the pending-review status in
+the preceding historical entry.
+
+**Limits:** These findings are evidence, not exhaustive correctness. Server
+counters observe handler activity, not every client stage; controlled clock
+tests establish timing boundaries rather than real queue-performance estimates.
+Verification remains on Windows/Python 3.14.7; TLS/proxy behavior is untested.
+Executor shutdown may wait for running/queued checks, with no total deadline or
+forced cancellation. Independent review does not remove these limitations.
+
+**Authorization:** Review and stage only milestone-three changes, then commit
+with `feat: add bounded concurrent endpoint checks`. Do not push or begin
+milestone four.
+
 ## Future entry outline
 
 - Objective and authorized milestone.

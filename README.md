@@ -1,9 +1,10 @@
 # EndpointCheck
 
 A small Python command-line API inspector and learning project for AI-assisted
-engineering. **Milestones one and two are implemented:** strict JSON validation,
-immutable settings, a validation-only CLI, and a single-endpoint GET checker.
-Concurrency, a checking CLI, report formatting, and Docker are not implemented.
+engineering. **Milestones one through three are implemented:** strict JSON
+validation, immutable settings, a validation-only CLI, single-endpoint GET
+checking, and bounded concurrent orchestration. A checking CLI, report formatting,
+and Docker are not implemented.
 
 ## Setup (PowerShell, from the repository root)
 
@@ -57,6 +58,11 @@ statuses, redirects, delayed headers/body, incomplete downloads, refusal, and
 regularly arriving data. Connection timeout is simulated; exact latency equality
 uses a controlled clock. No public endpoint is needed.
 
+Runner tests also use a concurrent local server with lock-protected handler
+counters, plus simulated checks and synchronization events for worker limits,
+overlap, ordering, failure isolation, and queue-time exclusion. Server counters
+observe request handlers rather than all client activity stages.
+
 ## Single-endpoint checker (Python API)
 
 `endpointcheck.checker.check_endpoint(endpoint)` takes one validated
@@ -71,6 +77,20 @@ deadline: regularly arriving data can finish slowly without a read timeout.
 Elapsed time includes the whole body, using a monotonic clock. Small finite API
 responses remain the intended use, without an enforced size/duration cap.
 
+## Concurrent runner (Python API)
+
+`endpointcheck.runner.run_checks(settings)` accepts validated `Settings`, submits
+all endpoints using `max_workers`, and returns one result per endpoint in
+configuration order for ordinary request outcomes. Workers start queued checks
+as capacity becomes available. Collection stays on the calling thread (normally
+the main thread); the runner does not print or format reports.
+
+Failed/timed-out results do not cancel other checks. Programming exceptions
+remain visible; executor shutdown may wait for running and queued checks before
+they propagate. There is no total deadline or forced thread cancellation.
+All endpoints are submitted at once, so queued-future memory grows with endpoint
+count. The validation CLI still performs no HTTP checks.
+
 ## Documentation and remaining milestones
 
 - [REQUIREMENTS.md](REQUIREMENTS.md): behavior and acceptance criteria.
@@ -79,7 +99,6 @@ responses remain the intended use, without an enforced size/duration cap.
 - [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md): recommendations, explicit user
   decisions, verification evidence, and limitations.
 
-Remaining, separately authorized milestones: bounded
-concurrent orchestration; complete CLI reporting; Docker and a controlled
+Remaining, separately authorized milestones: complete CLI reporting; Docker and a controlled
 demonstration API. Future HTTP timeouts will not enforce a total deadline; the
 small/finite-response usage limitation is recorded in requirements.

@@ -1,6 +1,7 @@
 # Proposed architecture
 
-Status: configuration, validation CLI, and single-endpoint checking implemented.
+Status: configuration, validation CLI, single-endpoint checking, and bounded
+orchestration implemented. Complete CLI reporting and Docker remain planned.
 Product behavior and acceptance criteria are defined in
 [REQUIREMENTS.md](REQUIREMENTS.md). This document describes design choices, not
 additional product rules.
@@ -11,7 +12,7 @@ additional product rules.
 | --- | --- |
 | `config.py` (implemented) | Load strict JSON, validate the complete configuration, and produce immutable typed settings. |
 | `checker.py` (implemented) | Perform one GET, consume the body, measure elapsed time, and return status/error evidence and outcome. |
-| `runner.py` (planned) | Submit checks to a bounded thread pool and collect results on the main thread. |
+| `runner.py` (implemented) | Submit all checks to a bounded thread pool, collect completed futures on the caller thread, and return configuration-order results. |
 | `cli.py` (validation implemented) | Validate a configuration; checking/reporting remain planned. |
 
 Flow: CLI → complete configuration validation → runner → checker workers →
@@ -30,11 +31,26 @@ handles that error, and argparse handles invocation errors.
 elapsed seconds, optional status code, and optional error string, as specified
 in requirements. `check_endpoint` accepts one validated `EndpointSettings`.
 
-Use `ThreadPoolExecutor` with the configured worker count. Associate each future
-with its input position so results can be collected independently of completion
-order and reported in configuration order. Workers should not print or mutate a
-shared report. Expected request exceptions become results inside the checker;
-Unexpected programming errors propagate. The runner itself is not implemented.
+`runner.run_checks(settings)` accepts validated `Settings` and returns a list of
+`CheckResult` objects. It submits one future per endpoint to `ThreadPoolExecutor`
+with `max_workers`, associating each future with its configuration position.
+`as_completed` yields finished futures for collection; a position-indexed local
+dictionary restores order on return. Available workers start queued jobs without
+waiting for the collector or an earlier endpoint. Workers only return results;
+the runner prints nothing and owns no shared reporting state.
+
+Collection runs synchronously on the calling thread; the intended application
+caller is the main thread. The API does not enforce which thread invokes it.
+Failed/timed-out results are ordinary values and do not cancel other futures.
+Unexpected programming exceptions propagate from `future.result()`; the runner
+does not invent failure results or promise a complete result list in that case.
+The executor context waits for shutdown, including running/queued checks, before
+an exception leaves the function. It does not forcibly cancel threads or add a
+total deadline; a continually producing response can keep shutdown waiting.
+
+Submitting all endpoints keeps the runner small. The worker count bounds active
+checks, not the number of queued futures; submission/storage use O(endpoint count)
+memory. No load balancer, retry policy, or report formatting is introduced.
 
 ## Dependencies and tradeoffs
 
@@ -107,11 +123,30 @@ finite-response usage limitation; there is no enforced response-size cap.
 | 4. Complete CLI reporting | Approved output contract and exit codes. | Subprocess checks against independently specified expected output and exit codes. |
 | 5. Docker and a controlled demonstration API | Container execution and repeatable demonstration scenarios. | Approved scenarios through container networking, including readiness and inspector process outcomes. |
 
-Milestone-one and milestone-two verification is recorded in the engineering log; milestones 3–5
-remain pending. Real timing tests should use generous
+Milestones one through three have verification recorded in the engineering log;
+milestones four and five remain pending. Real timing tests should use generous
 margins; exact threshold equality should use controlled clock inputs. Avoid
 unreliable public endpoints or assumptions that an unreachable address will
 consistently trigger a connection timeout.
+
+Milestone-three tests combine simulated checks with a concurrent local HTTP
+server. Lock-protected simulated counters/barriers observe whole worker-call
+overlap and limits; events force queued work to start before an earlier check
+finishes. Completion records and returned names independently establish order.
+A collection iterator spy records main-thread collection and worker identities.
+
+The real server records active handlers and maximum overlap under a lock, with
+final-byte delivery/decrement serialized against new handler counting to avoid
+tail-bookkeeping inflation. These counters observe server-side request handling,
+not DNS, TCP connection setup, client cleanup, or every client activity stage.
+Separate tests show one-worker sequencing, actual multiworker overlap, and
+healthy checks after failed/timed-out results. A queued real HTTP check uses a
+controlled monotonic clock advanced while its worker is occupied, proving its
+elapsed value begins at HTTP execution rather than submission. This is a
+deterministic boundary check, not a real-world queue-latency benchmark.
+Fixture waits are bounded; shutdown signals handlers, joins non-daemon handler
+threads, and asserts the server thread ended. Passing tests are evidence, not
+exhaustive scheduling or network correctness.
 
 The validator imports file/JSON/type utilities and a URL syntax parser, with no
 HTTP client, socket invocation, DNS lookup, or request execution path. A test
