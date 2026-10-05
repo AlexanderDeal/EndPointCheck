@@ -1,0 +1,37 @@
+{
+  "max_workers": 4,
+  "endpoints": [
+    {
+      "name": "healthy",
+      "url": "http://demo-api:8000/healthy",
+      "expected_status": 200,
+      "latency_threshold_seconds": 5,
+      "connect_timeout_seconds": 2,
+      "read_timeout_seconds": 2
+    },
+    {
+      "name": "slow",
+      "url": "http://demo-api:8000/slow",
+      "expected_status": 200,
+      "latency_threshold_seconds": 0.2,
+      "connect_timeout_seconds": 2,
+      "read_timeout_seconds": 2
+    },
+    {
+      "name": "error",
+      "url": "http://demo-api:8000/error",
+      "expected_status": 200,
+      "latency_threshold_seconds": 5,
+      "connect_timeout_seconds": 2,
+      "read_timeout_seconds": 2
+    },
+    {
+      "name": "timeout",
+      "url": "http://demo-api:8000/timeout",
+      "expected_status": 200,
+      "latency_threshold_seconds": 5,
+      "connect_timeout_seconds": 2,
+      "read_timeout_seconds": 0.3
+    }
+  ]
+}

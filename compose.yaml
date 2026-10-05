@@ -1,0 +1,19 @@
+services:
+  demo-api:
+    build:
+      context: .
+      target: demo-api
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=1).close()"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 2s
+  inspector:
+    build:
+      context: .
+      target: inspector
+    depends_on:
+      demo-api:
+        condition: service_healthy
+    restart: "no"

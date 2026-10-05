@@ -1,7 +1,8 @@
 # EndpointCheck requirements
 
 Status: validation, single-endpoint checking, orchestration, and checking CLI/
-reports implemented. Docker remains planned.
+reports implemented. Docker packaging and the demo API are implemented;
+container execution is verified for the controlled mixed and healthy scenarios.
 This document is the source of truth for product behavior and acceptance
 criteria. Design belongs in [ARCHITECTURE.md](ARCHITECTURE.md); repository
 working instructions belong in [AGENTS.md](AGENTS.md).
@@ -245,11 +246,34 @@ the main thread collects and reports them in configuration order.
     real checking. Equivalent reports retain the same structural evidence, but
     independently measured HTTP durations need not match exactly.
 
+26. **AC-26 — Controlled demonstration:** A concurrent API exposes `/ready` and
+    `/healthy` with prompt 200 finite bodies; `/slow` returns 200 after 0.6 seconds;
+    `/error` promptly returns 500; `/timeout` flushes 200 headers immediately and
+    waits one second before delivering its body. Expected client disconnects
+    must not produce noisy server tracebacks.
+27. **AC-27 — Mixed demonstration:** Four workers check healthy, slow, error,
+    timeout in that configuration order, expecting 200. Slow uses threshold 0.2
+    seconds and read timeout 2 seconds; timeout uses read timeout 0.3 seconds.
+    Healthy/error thresholds are generous. The report shows healthy, slow, failed,
+    timed out, one of each; timeout retains status 200 and the inspector exits 1.
+    Repeat the mixed run; an all-healthy configuration exits 0.
+28. **AC-28 — Container lifecycle:** Two Compose services, `demo-api` and
+    `inspector`, communicate at `http://demo-api:8000`. A dedicated readiness
+    health check gates inspector startup. Readiness is a startup observation,
+    not a guarantee of later availability. The installed inspector CLI reports
+    and exits. No host ports are published by default.
+29. **AC-29 — Packaging and verification:** Both container processes run as
+    non-root users on a Python version compatible with metadata. Install the
+    inspector normally, without editable installation or host virtualenv usage.
+    Exclude unnecessary files and local secrets from build context. Validate
+    Compose and verify real builds, networking, readiness and inspector exit
+    codes when Docker is available; explicitly report unverified execution when
+    unavailable. Cleanup is limited to this project's demonstration resources.
+
 ## Decisions still pending
 
 - Whether future URL validation needs stricter hostname/percent-escape rules
   beyond the current structural parser checks; no DNS validation is intended.
-- Docker/demo scenarios, startup/readiness behavior, and acceptance criteria.
 
 Resolve these here before implementing dependent behavior. Do not infer approval
 from an architecture recommendation.

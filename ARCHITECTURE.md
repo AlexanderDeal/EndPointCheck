@@ -1,7 +1,8 @@
 # Proposed architecture
 
 Status: configuration, validation CLI, single-endpoint checking, and bounded
-orchestration implemented, with checking CLI and reports. Docker remains planned.
+orchestration implemented, with checking CLI and reports. Docker packaging and
+the demo API are implemented; the controlled container scenarios are verified.
 Product behavior and acceptance criteria are defined in
 [REQUIREMENTS.md](REQUIREMENTS.md). This document describes design choices, not
 additional product rules.
@@ -144,7 +145,8 @@ finite-response usage limitation; there is no enforced response-size cap.
 
 Milestones one through three have verification recorded in the engineering log;
 milestone four adds installed/module subprocess verification and formatting tests;
-milestone five remains pending. Real timing tests should use generous
+milestone five adds packaging and local demo tests, with container execution
+verified on Docker Desktop Linux containers. Real timing tests should use generous
 margins; exact threshold equality should use controlled clock inputs. Avoid
 unreliable public endpoints or assumptions that an unreachable address will
 consistently trigger a connection timeout.
@@ -187,3 +189,41 @@ additional evidence. Passing checks are not proof of correctness.
 
 Working instructions live in [AGENTS.md](AGENTS.md); recommendations, decisions,
 and evidence are tracked in [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md).
+
+## Milestone-five packaging and demonstration
+
+`demo_api/server.py` is separate from the installed inspector package. Its
+standard-library `ThreadingHTTPServer` handles simultaneous requests; `/ready`
+is independent of the controlled endpoint delays specified in requirements.
+Response lengths are explicit and finite. `/timeout` flushes headers before its
+body delay; expected broken-pipe/reset/aborted disconnects are handled quietly.
+Other errors remain visible. This is a small demonstration server, not a
+hardened production service or a concurrency/load-testing tool.
+
+One Dockerfile has `demo-api` and `inspector` targets sharing Python 3.14 slim
+(compatible with metadata). The moving image tag accepts upstream patch updates;
+it is not digest-pinned and reproducible builds are not promised. The inspector
+uses a normal `pip install .` and the existing launcher. Only inspector package
+files are installed; demo code is copied into the separate demo image. Both
+processes run as UID/GID 10001. The allowlist `.dockerignore` restricts context
+to build metadata, Python sources and the two demo configurations.
+
+Compose creates two services and their private default network without published
+ports. Inspector addresses `http://demo-api:8000`; health checks inside demo-api
+use loopback `/ready`. `depends_on: service_healthy` gates startup, not continued
+availability. Inspector has no restart policy and exits after its report. The
+all-healthy scenario overrides only the CLI configuration argument.
+
+Tests observe real headers before stalled body delivery, completed delays and
+local subprocess exit codes. A controlled delay plus events holds two handlers
+open while readiness completes, independently demonstrating overlap without
+fragile scheduling assertions. These observations cover HTTP handlers rather
+than every client activity stage. Fixture waits and client sockets are bounded;
+non-daemon handler threads are joined on teardown. Compose syntax is validated;
+image builds, normal installation, live UID 10001 processes, service DNS and
+startup ordering were subsequently verified on Docker 29.8.1 / Compose 5.5.1
+with Python 3.14.8 containers. Health-check completion timestamps precede
+inspector start, and mixed/healthy actual exits were 1/0. Compose stops the API
+after mixed completion; observed API exit 137 is separate from inspector exit.
+Graceful SIGTERM handling is not implemented in this controlled server.
+Operational steps are in [DEMO.md](DEMO.md).

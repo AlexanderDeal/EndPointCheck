@@ -501,6 +501,220 @@ metadata, and documentation changes with
 untracked `examples/manual-invalid.json` outside this commit. Do not push or begin
 milestone five.
 
+## 2026-10-05 — Milestone five: packaging and controlled demonstration
+
+**User prompt and authorization:** Implement milestone five only: check Docker,
+Compose and daemon first; preserve inspector behavior; provide two services, a
+concurrent controlled API, readiness, mixed and all-healthy scenarios, non-root
+normal-install images, build-context exclusions, local/container verification
+and documentation. Do not install Docker, change machine settings, commit or
+push. Stop for review. The full prompt is in the conversation; approved product
+behavior is recorded as AC-26–29 in requirements rather than duplicated here.
+
+**Explicit user decisions:** Standard-library demo preferred; service-name
+networking, health-gated startup, finite bodies, flushed timeout headers,
+specified delays/timeouts, four mixed workers, expected report order/classifications
+and exit codes, no default host ports, no inspector persistence/retries/deadlines.
+
+**AI design recommendations and rationale:** A separate `demo_api` package keeps
+demonstration behavior out of the inspector. One multi-target Dockerfile avoids
+duplicating base/user setup; normal installation creates the existing launcher.
+Python 3.14 slim follows metadata and uses a moving patch tag rather than an
+unverified digest. UID/GID 10001 is an implementation choice. An allowlist
+`.dockerignore` limits context to needed inputs. `/ready` checks startup only.
+Healthy/error thresholds are five seconds and connect timeouts two seconds;
+these provide generous local timing margins without changing agreed inspector
+semantics. The healthy scenario contains one healthy endpoint. Operational
+commands remain explicitly unverified until real container execution.
+
+**Changes:** Added Dockerfile, Compose file, `.dockerignore`, `demo_api` server,
+two readable demo configurations, focused demo tests and DEMO.md. Expanded strict
+mypy scope to demo code. Updated requirements, architecture and README. Existing
+inspector source and AGENTS.md were preserved. The unrelated untracked
+`examples/manual-invalid.json` was left untouched.
+
+**Actual environment checks:** `docker --version` reported 29.8.1;
+`docker compose version` reported 5.5.1. Sandbox Docker commands could not read
+the user's Docker config; a read-only elevated `docker info` confirmed the real
+`desktop-linux` context and failed because the Docker Desktop Linux daemon pipe
+was absent. No daemon was started or settings changed. Elevated
+`docker compose -p endpointcheck-m5-review config --quiet` exited 0 without
+warnings. No images, containers or networks were created; cleanup was therefore
+unnecessary. Build/run/network/readiness/user/installation checks inside actual
+containers were not run and remain unverified.
+
+**Actual verification:**
+
+| Command | Observed result |
+| --- | --- |
+| `.\.venv\Scripts\python.exe -m pytest tests/test_demo_api.py -s` | Final focused run: 11 passed in 5.73 seconds, no warnings; two mixed reports (inspector exit 1 each), one healthy report (inspector exit 0). Earlier `-q -s` runs are covered by corrections below. |
+| `.\.venv\Scripts\python.exe -m pytest` | 235 passed in 26.20 seconds, no warnings |
+| `.\.venv\Scripts\python.exe -m ruff check .` | All checks passed |
+| `.\.venv\Scripts\python.exe -m ruff format --check .` | 22 files already formatted |
+| `.\.venv\Scripts\python.exe -m mypy` | Strict mode: no issues in 16 source files |
+| `git diff --check` | Exit 0, no whitespace errors; Git emitted normal LF/CRLF conversion notices |
+
+**Observed local output:** The first focused mixed run used ephemeral loopback
+port 53530, reporting healthy 200 at 0.007 seconds, slow 200 at 0.605 seconds,
+failed 500 at 0.006 seconds with expected/received status error, and timed out
+200 at 0.296 seconds with a streamed-body `ConnectionError` read-timeout message.
+Summary was `healthy=1, slow=1, failed=1, timed out=1`. Repeat used port 53536 and
+the same classifications/order/counts. Healthy-only used port 53542, status 200,
+0.015 seconds and summary `healthy=1, slow=0, failed=0, timed out=0`.
+Subprocess return codes were 1, 1 and 0 respectively; pytest's wrapper exit
+code was separate. These were real local CLI processes, not container output.
+The final focused rerun again returned 1, 1 and 0 without warnings: ports
+54904/54910 for mixed and 54916 for healthy, with identical outcomes/counts;
+first mixed durations were 0.005/0.623/0.004/0.312 seconds and healthy-only 0.019.
+
+**Independent observations and coverage:** Direct `http.client` tests observe
+finite bodies/statuses, delayed slow headers and flushed timeout headers before
+body delivery. Event-controlled delay holds two actual HTTP handlers open while
+readiness completes, establishing overlap without scheduling-time comparisons.
+Real delays are verified separately. Local CLI integration validates original
+service-name configs, then substitutes only loopback host/port in temporary
+copies. It verifies order, outcomes, counts, status retention and exit codes
+across repeated mixed runs. A client disconnect is observed without stderr
+tracebacks after joining handlers. Fixture/client waits are bounded, and
+non-daemon handler threads are joined. These checks address local AC-26–27;
+AC-28–29 have source/configuration evidence but need runtime container evidence.
+
+**Failures and corrections:** Initial direct HTTP tests incorrectly treated
+`HTTPConnection` as a context manager, causing eight test failures and mypy
+errors. Replaced that with `contextlib.closing` and explicit IPv4 host/server
+port. An initial successful focused run then warned because a fixture closed
+the listening socket before stopping its serving loop. Corrected shutdown order;
+the final full suite passed without that warning. Ruff removed an unused import
+and formatted the new tests/server.
+
+**Limits and review status:** No claim of exhaustive correctness or human review
+of milestone five. Docker daemon absence prevents actual image builds, Linux
+runtime/non-root/normal-install checks, service-name DNS, Compose startup gates,
+container inspector output/exit codes and cleanup verification. Local socket
+observations do not cover every client activity stage; disconnect behavior is
+platform dependent. Moving image/build-tool versions are not fully reproducible.
+The demo server is not hardened for hostile clients. Existing small finite-body,
+no total deadline/cancellation, TLS/proxy and console-encoding limitations remain.
+No milestone-five product ambiguity blocks this implementation; future stricter
+URL syntax policy remains pending in requirements. User review and later real
+container verification remain required. No commit or push was performed.
+
+## 2026-10-05 — Milestone-five container runtime verification
+
+**User authorization:** Docker is now running. Follow DEMO.md; build both images,
+run mixed twice and healthy once; verify readiness, service networking, actual
+inspector exits/outcomes/status evidence and UID 10001; update supported claims
+and clean up only this project's resources. No commit or push.
+
+**Actual commands and results:** Commands ran from the repository with the user
+Docker context (elevated tool execution was needed to access Docker). First,
+`docker info --format '{{.ServerVersion}}'` returned 29.8.1. Project-scoped
+`docker compose -p endpointcheck-demo ps -a`, `docker ps -a --filter
+name=endpointcheck-demo-healthy` and `docker network ls --filter
+name=endpointcheck-demo` showed the documented resource names unused.
+
+- `docker compose -p endpointcheck-demo config --quiet`: exit 0.
+- `docker compose -p endpointcheck-demo build`: exit 0, both targets built.
+  Normal pip installation built the endpointcheck wheel and installed pinned
+  requests/urllib3. Python base resolved to digest
+  `sha256:c3e521df8b2b498a7a682e7e18676771cb80c6b75b8699af886b2d554ce40151`.
+- `docker compose -p endpointcheck-demo up --abort-on-container-exit
+  --exit-code-from inspector`: wrapper exit 1, captured immediately in
+  `$mixedWrapperExit`. `docker compose -p endpointcheck-demo ps -aq inspector`
+  supplied the ID; `docker inspect --format '{{.State.ExitCode}}' $inspectorId`
+  returned actual inspector exit 1. `docker compose -p endpointcheck-demo logs
+  inspector` confirmed the report. Outcomes healthy/slow/failed/timed out in
+  configuration order, statuses 200/200/500/200, durations
+  0.005/0.606/0.006/0.303 seconds, summary one each.
+- `docker compose -p endpointcheck-demo up --force-recreate
+  --abort-on-container-exit --exit-code-from inspector`: repeat wrapper exit 1
+  and inspected inspector exit 1. Same order/outcomes/statuses/counts; durations
+  0.005/0.605/0.003/0.302 seconds. Error was expected 200/received 500;
+  timeout error was streamed `ConnectionError` read timeout for `demo-api:8000`.
+- `docker compose -p endpointcheck-demo up -d --wait demo-api`: exit 0, healthy.
+  `docker compose -p endpointcheck-demo run --name endpointcheck-demo-healthy
+  inspector check /app/demo/all-healthy.json`: wrapper exit 0, captured in
+  `$healthyWrapperExit`. `docker inspect --format '{{.State.ExitCode}}'
+  endpointcheck-demo-healthy`: actual inspector exit 0. Report healthy 200,
+  0.004 seconds, summary healthy=1, slow=0, failed=0, timed out=0.
+
+**Runtime evidence:** `docker inspect` health-log/start timestamps established
+readiness before inspector execution. First successful `/ready` check ended
+21:20:13.776875695Z; inspector started 21:20:14.271858391Z. Repeat check ended
+21:20:42.521971891Z; inspector started 21:20:43.018827390Z. Compose also printed
+API Healthy before Inspector Starting. Post-stop health status was unhealthy;
+that does not negate the successful startup observations. Reports used original
+`http://demo-api:8000` URLs, with no local substitutions or published host ports.
+
+During repeat, a bounded polling observer ran `docker top
+endpointcheck-demo-inspector-1 -eo uid,pid,args` and the equivalent API command.
+Live processes: UID 10001, PID 1049, installed endpointcheck launcher; UID 10001,
+PID 974, `python -m demo_api.server`. Container config also specified
+10001:10001. `docker compose -p endpointcheck-demo exec demo-api id -u`
+returned 10001; `exec demo-api python --version` returned Python 3.14.8.
+
+Additional inspector probes used `docker compose -p endpointcheck-demo run --rm
+--no-deps --entrypoint python inspector -c ...`: `os.getuid()` and `/proc/1/status`
+reported 10001, and `socket.gethostbyname('demo-api')` returned 172.19.0.2.
+Initial metadata lookup from /app found source-tree metadata, so repeated with
+`--workdir /tmp`. The latter probe printed installed module path
+`/usr/local/lib/python3.14/site-packages/endpointcheck/__init__.py`, distribution
+directory `/usr/local/lib/python3.14/site-packages`, and direct_url.json with
+`dir_info: {}` (no editable flag), confirming normal installation independently
+of source-directory imports.
+
+Exact probe commands (in addition to the documented DEMO.md sequence):
+
+```powershell
+docker compose -p endpointcheck-demo exec demo-api id -u
+docker compose -p endpointcheck-demo exec demo-api python --version
+docker compose -p endpointcheck-demo run --rm --no-deps --entrypoint python inspector -c "import os, socket, importlib.metadata; print('uid=', os.getuid()); print('demo-api=', socket.gethostbyname('demo-api')); print('distribution=', importlib.metadata.distribution('endpointcheck').locate_file('')); print('pid1=', open('/proc/1/status').read().split('Uid:')[1].splitlines()[0])"
+docker compose -p endpointcheck-demo run --rm --no-deps --workdir /tmp --entrypoint python inspector -c "import endpointcheck, importlib.metadata; d=importlib.metadata.distribution('endpointcheck'); print('module=', endpointcheck.__file__); print('distribution=', d.locate_file('')); print('direct_url=', d.read_text('direct_url.json'))"
+```
+
+**Corrections and observations:** No source/container changes were needed.
+Updated current README, REQUIREMENTS, ARCHITECTURE and DEMO claims from unverified
+to verified only for these scenarios; historical evidence remains unchanged.
+Build pip emitted its usual root-install warning during image construction;
+runtime processes were verified non-root. Extra one-off probes warned that the
+named healthy container was an orphan; it was our known stopped test container,
+and we removed it explicitly rather than using broad orphan cleanup. Compose
+stopped API with exit 137 after each mixed run. That is an API shutdown
+observation, not inspector failure; graceful SIGTERM handling is not implemented
+and this limitation is now documented. Readiness remains a startup observation.
+
+**Cleanup:** `docker rm endpointcheck-demo-healthy` and
+`docker compose -p endpointcheck-demo down` succeeded. Probe containers used
+`--rm`. Final `docker ps -a --filter
+label=com.docker.compose.project=endpointcheck-demo` and `docker network ls
+--filter label=com.docker.compose.project=endpointcheck-demo` returned no rows.
+Only this verification's containers/network were removed. Built images and
+build cache were retained for subsequent demo use; no global prune.
+
+**Scope and limitations:** Runtime evidence now covers AC-28–29's controlled
+build/install/non-root/network/readiness/outcome requirements and repeats AC-27
+in containers. It does not prove exhaustive correctness, failure recovery,
+cross-platform reproducibility, TLS/proxy behavior or unusual console encodings.
+No Python/configuration code changed in this follow-up; the previously recorded
+235-test/static-check run remains the source verification evidence. Final
+`git diff --check` after documentation updates exited 0 with no whitespace errors
+(normal LF/CRLF conversion notices only). No human milestone-five
+review is claimed; no commit or push was performed.
+
+## 2026-10-05 — Milestone-five acceptance and commit authorization
+
+The user explicitly accepted milestone five and authorized a commit with
+`feat: add reproducible Docker API demo`. This records acceptance only: the user
+did not provide actual manual run evidence, so no human-performed runtime checks
+are claimed. Earlier local and container verification remains AI-performed
+evidence, not exhaustive correctness. Historical pending-review statements are
+superseded by this acceptance.
+
+Review and stage only milestone-five packaging, demo code/configurations/tests,
+metadata and documentation. Preserve the documented missing graceful SIGTERM
+handling and observed API exit 137. Leave unrelated
+`examples/manual-invalid.json` untracked. Do not add features or push.
+
 ## Future entry outline
 
 - Objective and authorized milestone.

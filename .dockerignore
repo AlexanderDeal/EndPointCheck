@@ -1,0 +1,12 @@
+# Allow only inputs needed by the two image targets. This excludes Git metadata,
+# virtual environments, caches, local secrets, tests and unrelated examples.
+**
+!Dockerfile
+!pyproject.toml
+!endpointcheck/
+!endpointcheck/*.py
+!demo_api/
+!demo_api/*.py
+!demo/
+!demo/mixed.json
+!demo/all-healthy.json

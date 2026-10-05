@@ -3,7 +3,9 @@
 A small Python command-line API inspector and learning project for AI-assisted
 engineering. **Milestones one through four are implemented:** strict validation,
 single-endpoint GET checking, bounded orchestration, and an installed CLI with
-plain-text reports and health-based exit codes. Docker is not implemented.
+plain-text reports and health-based exit codes. Milestone five adds Docker
+packaging and a controlled demo API. Local demo tests and Compose configuration
+and container builds/runs are verified for the mixed and all-healthy scenarios. See [DEMO.md](DEMO.md) for the short demonstration and cleanup sequence.
 
 ## Setup (PowerShell, from the repository root)
 
@@ -85,7 +87,7 @@ These commands were run successfully in the project-local environment:
 ```
 
 pytest temporary files live under ignored `.pytest_cache/tmp`, which pytest owns
-and clears on a run. Strict mypy checks application and tests. Tests include raw
+and clears on a run. Strict mypy checks application, demo API and tests. Tests include raw
 duplicate-key JSON, field boundaries, whole-config rejection, subprocess CLI
 behavior, and guarded socket/DNS calls. Checks provide evidence, not proof of
 correctness or an exhaustive network audit.
@@ -133,7 +135,34 @@ they propagate. There is no total deadline or forced thread cancellation.
 All endpoints are submitted at once, so queued-future memory grows with endpoint
 count. The validation CLI still performs no HTTP checks.
 
-## Documentation and remaining milestones
+## Docker demonstration
+
+The two services use a private Compose network, with no published host ports.
+Inspector uses the installed CLI and exits after reporting. Demo configurations
+are `demo/mixed.json` (expected exit 1) and `demo/all-healthy.json` (expected exit
+0); their URLs use `demo-api:8000`, so they are intended for Compose networking.
+The API health check gates startup, without guaranteeing later availability.
+
+Actually verified commands in this environment:
+
+```powershell
+docker --version
+docker compose version
+docker info
+docker compose -p endpointcheck-m5-review config --quiet
+.\.venv\Scripts\python.exe -m pytest tests/test_demo_api.py -s
+```
+
+The daemon was initially unavailable; subsequent runtime verification used
+Docker 29.8.1, Compose 5.5.1 and Python 3.14.8 Linux containers. The build, two
+mixed runs, healthy run and project-scoped container/network cleanup commands
+in [DEMO.md](DEMO.md) were then verified. Actual inspector exits were 1, 1 and 0.
+Readiness timestamps preceded inspector execution; service-name DNS and live
+UID 10001 processes were observed. Normal package installation was confirmed
+from outside the image source directory. No Docker installation or machine
+settings changes were needed. Local tests independently verify endpoint behavior.
+
+## Documentation
 
 - [REQUIREMENTS.md](REQUIREMENTS.md): behavior and acceptance criteria.
 - [ARCHITECTURE.md](ARCHITECTURE.md): implemented/planned components and tradeoffs.
@@ -141,6 +170,7 @@ count. The validation CLI still performs no HTTP checks.
 - [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md): recommendations, explicit user
   decisions, verification evidence, and limitations.
 
-Remaining milestone: Docker and a controlled demonstration API. HTTP timeouts
-do not enforce a total deadline; the
-small/finite-response usage limitation is recorded in requirements.
+Milestone five is accepted; controlled container scenarios are verified. HTTP timeouts
+do not enforce a total deadline; the small/finite-response usage limitation is
+recorded in requirements. TLS/proxy behavior and unusual console encodings remain
+incompletely tested.

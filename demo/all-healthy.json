@@ -1,0 +1,13 @@
+{
+  "max_workers": 4,
+  "endpoints": [
+    {
+      "name": "healthy",
+      "url": "http://demo-api:8000/healthy",
+      "expected_status": 200,
+      "latency_threshold_seconds": 5,
+      "connect_timeout_seconds": 2,
+      "read_timeout_seconds": 2
+    }
+  ]
+}
