@@ -62,6 +62,36 @@ inside inspector would refer to inspector itself. Both processes run as UID
 server. Existing timeout and finite-response limitations still apply; see
 [REQUIREMENTS.md](REQUIREMENTS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Experiment with the demo
+
+Edit [demo/mixed.json](demo/mixed.json) to see how classification depends on
+configured expectations. Try each change separately, keeping the URLs at
+`http://demo-api:8000`:
+
+1. For `/slow`, change `latency_threshold_seconds` from `0.2` to `2`.
+   Its roughly 0.6-second response becomes healthy under normal demo conditions.
+2. For `/error`, change `expected_status` from `200` to `500`.
+   Its prompt HTTP 500 response becomes healthy under normal demo conditions.
+
+Neither edit changes the API itself. Changing either example alone leaves other
+degraded endpoints, so the inspector still exits **1**.
+
+Configurations are copied into the inspector image, not mounted from your working
+directory. After each edit, rebuild inspector and create a fresh run:
+
+```powershell
+docker compose -p endpointcheck-demo build inspector
+docker compose -p endpointcheck-demo up --force-recreate --abort-on-container-exit --exit-code-from inspector
+```
+
+Before experimenting, note the existing values and inspect
+`git diff -- demo/mixed.json`. To restore, manually undo only the values you
+deliberately changed (normally back to `0.2` and `200`), preserving any unrelated
+edits. Review that diff again, then rebuild and rerun with the commands above to
+restore the image's configuration too. Avoid whole-file restore/reset commands
+when the file contains other work. Use the project-scoped cleanup commands above
+when finished.
+
 Locally verified fallback (no Docker required):
 
 ```powershell
