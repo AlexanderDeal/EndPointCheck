@@ -6,9 +6,16 @@ and container Python 3.14.8: mixed exits 1 twice, healthy exits 0.** First image
 than two minutes; the demonstration itself is short after building. Use the
 project/name below only if they are not already used by unrelated work.
 
+## Build
+
 ```powershell
 docker compose -p endpointcheck-demo config --quiet
 docker compose -p endpointcheck-demo build
+```
+
+## Mixed results — exit 1
+
+```powershell
 docker compose -p endpointcheck-demo up --abort-on-container-exit --exit-code-from inspector
 $mixedWrapperExit = $LASTEXITCODE
 $inspectorId = docker compose -p endpointcheck-demo ps -aq inspector
@@ -28,6 +35,11 @@ docker compose -p endpointcheck-demo up --force-recreate --abort-on-container-ex
 $repeatWrapperExit = $LASTEXITCODE
 $inspectorId = docker compose -p endpointcheck-demo ps -aq inspector
 docker inspect --format '{{.State.ExitCode}}' $inspectorId
+```
+
+## All healthy — exit 0
+
+```powershell
 docker compose -p endpointcheck-demo up -d --wait demo-api
 docker compose -p endpointcheck-demo run --name endpointcheck-demo-healthy inspector check /app/demo/all-healthy.json
 $healthyWrapperExit = $LASTEXITCODE
@@ -38,11 +50,23 @@ Expected healthy inspector exit: **0**, summary healthy=1, all other counts=0.
 The fixed one-off name makes its exit inspectable; remove it before repeating.
 Do not infer an inspector exit from a failed build/start wrapper.
 
+## Runtime notes
+
 Runtime verification observed Compose marking the API healthy before starting
 inspector, and health-check completion timestamps preceded inspector start.
 Live `docker top CONTAINER -eo uid,pid,args` showed UID 10001 for both processes.
 The mixed API shutdown exited 137 when Compose stopped it; this is separate from
 the inspector's expected exit 1. Graceful API SIGTERM handling is not implemented.
+
+Health checks use `/ready`; inspector starts after API health is observed.
+Readiness is a startup check, not a guarantee the API remains available.
+Services communicate using `demo-api:8000` on their Compose network; localhost
+inside inspector would refer to inspector itself. Both processes run as UID
+10001. The API is a controlled standard-library demonstration, not a production
+server. Existing timeout and finite-response limitations still apply; see
+[REQUIREMENTS.md](REQUIREMENTS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Cleanup
 
 Cleanup only these demonstration resources:
 
@@ -54,15 +78,7 @@ docker compose -p endpointcheck-demo down
 This removes demonstration containers and network; built images/cache remain
 available for later runs. No global prune or removal of unrelated resources.
 
-Health checks use `/ready`; inspector starts after API health is observed.
-Readiness is a startup check, not a guarantee the API remains available.
-Services communicate using `demo-api:8000` on their Compose network; localhost
-inside inspector would refer to inspector itself. Both processes run as UID
-10001. The API is a controlled standard-library demonstration, not a production
-server. Existing timeout and finite-response limitations still apply; see
-[REQUIREMENTS.md](REQUIREMENTS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
-
-## Demonstrate an input error (exit 2)
+## Missing configuration — exit 2
 
 Build the inspector image first using the build instructions above (or
 `docker compose -p endpointcheck-demo build inspector`). Then run:
@@ -112,6 +128,8 @@ edits. Review that diff again, then rebuild and rerun with the commands above to
 restore the image's configuration too. Avoid whole-file restore/reset commands
 when the file contains other work. Use the project-scoped cleanup commands above
 when finished.
+
+## Local verification
 
 Locally verified fallback (no Docker required):
 
