@@ -816,6 +816,246 @@ diagnostic log untracked. Do not push. Earlier pending-review statements are
 historical; this authorization permits the scoped commit without claiming
 exhaustive correctness or independently verified human run details.
 
+## 2026-10-06 — Compare manual terminal evidence with agent execution failures
+
+**User instruction:** Compare supplied successful terminal output with failed
+tracebacks and check temporary-file and loopback restrictions. Do not change
+application code/tests or introduce another workaround; do not commit. Keep
+manual and agent evidence separate and distinguish observations from hypotheses.
+
+**Actual manual evidence supplied by the user:** In their own PowerShell
+terminal at this repository, running
+`.\.venv\Scripts\python.exe -m pytest` without temporary-directory overrides
+collected 235 tests and finished `235 passed, 1 warning in 22.33s`.
+The transcript reports Windows, Python 3.14.7, pytest 9.1.1, pluggy 1.6.0,
+pyproject.toml configuration and testpaths=tests. It returns to the terminal
+prompt but does not print a numeric exit code; none is claimed as observed.
+This is actual user-provided manual-run output, superseding the earlier lack
+of a pasted summary, not a run performed by the AI.
+
+The one warning is PytestCacheWarning at cacheprovider.py:469 while writing
+`cache/nodeids`: `[WinError 183] Cannot create a file when that file already
+exists` at `.pytest_cache\v\cache`. The same nodeids warning appears in the
+saved failed agent output; the latter additionally warns about `cache/lastfailed`.
+Because all manual tests passed despite nodeids warning, it alone does not
+explain the failed agent tests. Neither environment is claimed warning-free.
+
+**Actual agent runs:** The earlier two runs remain exit 1 with 159 passed,
+34 failed, 42 setup errors and two warnings (12.81 and 12.42 seconds).
+The subsequently requested third ordinary run also exited 1 with the same
+counts, in 12.54 seconds. It was AI-performed, not additional manual
+verification. The saved second-run traceback remains untracked in
+`pytest-default-run-2.log`; its useful error summary is retained above.
+The failed output and manual transcript use identical reported Python/pytest
+versions and the same test discovery/configuration. No code or tests changed.
+
+**Observed failure locations:** Saved pytest traceback reaches
+`_pytest/pathlib.py:239`: could not create a numbered `pytest-` directory after
+ten attempts under the agent's sandbox system-temp `pytest-of-alex7` root.
+Read-only source review shows mkdir exceptions are suppressed by that retry
+helper, so its original exception is not available. Other failed assertions
+show loopback requests failing with WinError 10013 rather than receiving expected
+HTTP statuses. Agent startup prints a Python real-location diagnostic absent
+from the supplied manual transcript.
+
+**Direct agent-environment probes:** Inline Python was passed to the existing
+`.venv\Scripts\python.exe -`; no tests/configuration were altered. The probe
+printed `sys.executable`, `tempfile.gettempdir()` and checked PYTEST_ADDOPTS /
+PYTEST_DEBUG_TEMPROOT (both unset). Temporary paths used
+`AppData\Local\Packages\sandbox.{...}\AC\Temp`, with differing identifiers
+between tool invocations. Probes used only their own newly created resources:
+
+- First `tempfile.TemporaryDirectory()` create/file-write/cleanup sequence
+  raised `PermissionError(13, 'Access is denied')`. The combined catch does not
+  identify its precise failing stage.
+- The equivalent workspace sequence (`dir=Path.cwd()`) successfully created
+  the directory, wrote/read a small probe file, and cleaned up.
+- A focused system-temp directory probe printed that creation succeeded.
+  Context-manager cleanup then failed: `shutil.py` os.rmdir raised WinError 5,
+  followed by tempfile's automatic permission-reset fallback also raising
+  WinError 5. The traceback was captured in tool output. No manual permission
+  change, elevated execution or forced deletion was performed; normal library
+  cleanup did not succeed. This shows directory creation is not universally
+  denied, and temp lifecycle access needs to be distinguished by stage.
+- A raw socket bound to `127.0.0.1` on ephemeral port 57905 and listened
+  successfully. A client socket's connect to that listener failed with
+  `PermissionError(..., 10013, ...)`, before accept. Binding/listening is
+  therefore supported in this probe; connecting is the directly observed
+  forbidden operation. Sockets had one-second timeouts and were closed.
+
+These diagnostic commands exited 0 because exceptions were deliberately caught
+and printed; exit 0 does not mean all probed operations succeeded. The probes
+are narrower evidence than a full permission/network audit.
+
+**Observed versus inferred:** Access failures at agent system-temp operations
+and loopback connect are directly observed and consistent with the failed
+tracebacks. Execution-environment restrictions are a supported hypothesis for
+the manual/agent discrepancy, not a proven policy-level cause. No specific
+Windows ACL, firewall rule, file lock, sandbox mechanism or original fixed-temp
+cleanup cause has been established. The manual transcript does not reveal its
+actual temporary path or security context. No claim that application code is
+faulty, that user runs were reproduced by the AI, or that passing tests prove
+correctness. Only this log changed in this investigation; no commit or push.
+
+## 2026-10-06 — Approved pytest run outside the restrictive sandbox
+
+**User authorization and execution context:** The user requested using the
+tool's supported approval mechanism to run the unchanged suite outside the
+restrictive sandbox, permitting required temporary-filesystem/local-network
+operations. The exec tool accepted `sandbox_permissions="require_escalated"`
+with a one-time approval justification. It ran from
+`C:\Users\alex7\Projects\EndPointCheck` using the existing project-local
+environment, with the exact command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+No basetemp override, application/test changes, Windows permission/firewall
+changes or permanent sandbox settings were introduced. This is AI-performed
+verification through the approved execution context, not a manual user run.
+
+**Actual outcome:** Windows, Python 3.14.7, pytest 9.1.1, pluggy 1.6.0;
+pyproject.toml configuration, testpaths=tests, 235 collected.
+`235 passed, 1 warning in 25.66s`, zero failures/setup errors, exit code **0**.
+The sole warning was PytestCacheWarning at cacheprovider.py:469 while writing
+`.pytest_cache\v\cache\nodeids`: `[WinError 183] Cannot create a file when
+that file already exists` at `.pytest_cache\v\cache`. No default-temp cleanup
+warning or loopback test failure was reported in this run. The cache warning
+was retained, not fixed or suppressed.
+
+**Comparison:**
+
+| Evidence source/context | Passed | Failed | Setup errors | Warnings | Exit | Time |
+| --- | --- | --- | --- | --- | --- | --- |
+| AI restricted run 1 | 159 | 34 | 42 | 2 | 1 | 12.81 s |
+| AI restricted run 2 | 159 | 34 | 42 | 2 | 1 | 12.42 s |
+| AI restricted repeat | 159 | 34 | 42 | 2 | 1 | 12.54 s |
+| User's supplied normal PowerShell transcript | 235 | 0 | 0 | 1 | Not printed | 22.33 s |
+| AI approved run outside restrictive sandbox | 235 | 0 | 0 | 1 | 0 | 25.66 s |
+
+The same code/tests/configuration and reported Python/pytest versions passed
+after changing only the tool execution context. Together with the direct
+restricted-context temp cleanup and loopback-connect access errors, this is
+strong evidence that execution restrictions explain the failing agent runs.
+It does not isolate the particular Windows ACL, lock, firewall or sandbox
+mechanism behind each error, nor prove the original fixed-temp cleanup cause.
+The nodeids cache warning occurs in successful runs as well and remains a
+separate observed limitation. Passing the suite is evidence, not exhaustive
+correctness. Earlier failed/manual/probe evidence is preserved above.
+
+**Disposition:** Only this log was updated. Diagnostic traceback and unrelated
+manual-invalid file remain untracked. No commit or push; permission scope was
+this run, not a permanent environment change.
+
+## 2026-10-06 — Read-only investigation of the remaining nodeids cache warning
+
+**Scope:** Investigate only the remaining warning; no cache deletion, permission
+change, permanent cache disabling, application/test changes, commit or push.
+Inspection used the approved outside-sandbox tool context where filesystem and
+process metadata access were needed. No new pytest run or cache write was made.
+
+**Exact available warning from the approved passing run (235 passed, exit 0):**
+
+```text
+cacheprovider.py:469: PytestCacheWarning: could not create cache path C:\Users\alex7\Projects\EndPointCheck\.pytest_cache\v\cache\nodeids: [WinError 183] Cannot create a file when that file already exists: 'C:\\Users\\alex7\\Projects\\EndPointCheck\\.pytest_cache\\v\\cache'
+```
+
+The affected target is `C:\Users\alex7\Projects\EndPointCheck\
+.pytest_cache\v\cache\nodeids`; the exception specifically names its parent
+`.pytest_cache\v\cache`. Installed pytest `Cache.set` calls `_mkdir(path.parent)`
+before opening the nodeids file, catches OSError there and emits this warning
+without preserving a traceback. Thus the original mkdir traceback is unavailable
+in the successful run; the displayed line 469 is the session-finish caller.
+This is directory preparation failure, not evidence of a nodeids serialization
+or write failure after opening the file.
+
+**Read-only path inspection:** `Get-Item -LiteralPath ... -Force` identified
+`.pytest_cache` as a normal directory with no reported link target. Access to
+`.pytest_cache/v`, `.pytest_cache/v/cache` and `.pytest_cache/v/cache/nodeids`
+was denied. Even listing `.pytest_cache` with Get-ChildItem was denied. Python
+`Path.lstat()` of each descendant produced a captured traceback ending in
+`PermissionError: [WinError 5] Access is denied`. That traceback describes the
+inspection attempt, not the caught pytest mkdir failure. A file/directory
+conflict cannot be confirmed or excluded because descendant types are unreadable.
+
+Read-only review of Python `Path.mkdir(exist_ok=True, parents=True)` shows it
+rethrows an existing-path OSError unless `is_dir()` confirms a directory. This
+is a plausible route for inaccessible directory metadata to surface as WinError
+183 rather than proving a regular-file conflict. It is source-supported
+inference, not a reproduced mkdir call or established underlying ACL cause.
+
+**Process check:** Get-CimInstance Win32_Process snapshots filtered Python and
+pytest executables; none were present. A broader command-line pytest search
+matched only the inspection's own pwsh.exe command (PID 14024), not a pytest
+runner. No concurrent pytest process was observed at those instants; historical
+races or hidden/unavailable process information are not excluded.
+
+**Smallest proposed next step, not applied:** Run once outside the sandbox with
+an unused workspace cache directory, for example
+`.\.venv\Scripts\python.exe -m pytest -o cache_dir=.pytest_cache_probe` after
+confirming that name is unused. This retains caching, preserves the inaccessible
+cache and changes no permanent configuration. A warning-free result would
+support a problem specific to the current cache location, not prove its precise
+cause. Restore ordinary invocation afterward. Do not delete or replace nodeids
+based on the warning alone. If later read-only inspection establishes a regular
+file at the expected directory path, back up/rename only that conflicting entry;
+that conditional correction is not currently justified by available evidence.
+
+Only this engineering log changed. Existing untracked files are preserved.
+No correction was executed or permission/security settings changed.
+
+## 2026-10-06 — Adopt the verified persistent-cache location workaround
+
+**User evidence and authorization:** The user reports both cache-location probes
+clean (235 passed without warnings). The supplied second manual transcript runs
+`.\.venv\Scripts\python.exe -m pytest -o cache_dir=.pytest_cache_probe` in their
+normal PowerShell terminal and explicitly shows `235 passed in 21.68s`, then
+`$LASTEXITCODE` equal to 0. First-run success is user-reported; no first-run
+duration or numeric exit was supplied. These are manual-user evidence, separate
+from the following AI-performed verification. The user authorizes persisting
+this location if both probes are clean; no commit/push.
+
+**Change and rationale:** Added `cache_dir = ".pytest_cache_probe"` under existing
+pytest options and `/.pytest_cache_probe/` to .gitignore. Default pytest
+temporary-directory management remains in effect (no basetemp override).
+Persistent cache location and per-run temporary directories are distinct.
+README records the workaround and evidence. Application code, tests and
+testpaths remain unchanged. The inaccessible original cache was preserved;
+no Windows permissions were changed or cache disabling introduced.
+
+**Actual approved acceptance run:** Tool exec used the one-time
+`sandbox_permissions="require_escalated"` mechanism, outside the restrictive
+sandbox, from `C:\Users\alex7\Projects\EndPointCheck`. Exact ordinary command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+No command-line cache/temp overrides. Output shows cachedir=.pytest_cache_probe,
+Python 3.14.7, pytest 9.1.1, pluggy 1.6.0 and 235 collected. Result:
+**235 passed in 25.97s, zero warnings/failures/errors, exit 0**. This is
+AI-observed execution, not another manual user run. The preceding approved run
+with the original cache passed 235 tests but had the nodeids WinError 183 warning;
+the configured-location run removes that observed warning in this context.
+
+**Additional checks:** Project-local `python -m ruff check .` passed;
+`python -m ruff format --check .` reported 22 formatted files;
+strict `python -m mypy` found no issues in 16 files; exit 0 each.
+Those checks ran in the restricted context and printed the previously observed
+Python real-location diagnostic. `git -c
+safe.directory=C:/Users/alex7/Projects/EndPointCheck diff --check` passed
+(exit 0; normal LF/CRLF notices). The newly configured cache is ignored by Git.
+
+**Interpretation and limits:** This is explicitly a cache-location workaround,
+not a repair or diagnosis of the old directory. Its underlying access problem,
+including whether there is a conflicting entry, Windows ACL or file lock,
+remains unknown. Restricted-context temp/socket failures remain separate from
+cache-location evidence. Clean runs do not prove exhaustive correctness or
+permanent access across all execution contexts. Historical investigation entries
+are preserved. No old cache deletion, permission change, permanent sandbox
+change, application/test modification, commit or push occurred.
+
 ## Future entry outline
 
 - Objective and authorized milestone.

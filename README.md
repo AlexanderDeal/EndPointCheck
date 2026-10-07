@@ -88,7 +88,15 @@ These commands were run successfully in the project-local environment:
 
 pytest manages per-run temporary directories under the system temporary location
 by default, including retention and cleanup of older runs. No fixed `basetemp`
-is configured. Strict mypy checks application, demo API and tests. Tests include raw
+is configured. Pytest's separate persistent cache uses `.pytest_cache_probe`,
+ignored by Git. This cache-location workaround avoids the old `.pytest_cache`
+access problem; its underlying cause remains unknown. Two user terminal probes
+passed all 235 tests without warnings (the supplied second transcript shows
+exit 0). The old cache is preserved and no Windows permissions were changed.
+Ordinary pytest with this configuration was also verified through the approved
+outside-sandbox execution path: 235 passed, no warnings, exit 0. Restricted
+agent execution previously had separate temp/socket access failures.
+Strict mypy checks application, demo API and tests. Tests include raw
 duplicate-key JSON, field boundaries, whole-config rejection, subprocess CLI
 behavior, and guarded socket/DNS calls. Checks provide evidence, not proof of
 correctness or an exhaustive network audit.
