@@ -20,7 +20,6 @@ include = ["endpointcheck*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--basetemp=.pytest_cache/tmp"
 
 [tool.ruff]
 target-version = "py314"

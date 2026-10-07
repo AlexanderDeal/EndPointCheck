@@ -86,8 +86,9 @@ These commands were run successfully in the project-local environment:
 .\.venv\Scripts\python.exe -m mypy
 ```
 
-pytest temporary files live under ignored `.pytest_cache/tmp`, which pytest owns
-and clears on a run. Strict mypy checks application, demo API and tests. Tests include raw
+pytest manages per-run temporary directories under the system temporary location
+by default, including retention and cleanup of older runs. No fixed `basetemp`
+is configured. Strict mypy checks application, demo API and tests. Tests include raw
 duplicate-key JSON, field boundaries, whole-config rejection, subprocess CLI
 behavior, and guarded socket/DNS calls. Checks provide evidence, not proof of
 correctness or an exhaustive network audit.

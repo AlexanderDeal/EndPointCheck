@@ -715,6 +715,107 @@ metadata and documentation. Preserve the documented missing graceful SIGTERM
 handling and observed API exit 137. Leave unrelated
 `examples/manual-invalid.json` untracked. Do not add features or push.
 
+## 2026-10-06 — Remove the fixed pytest temporary-directory override
+
+**Authorized scope and reported evidence:** Fix pytest temporary-directory
+configuration only; preserve testpaths/tests, avoid deleting inaccessible
+folders, changing Windows permissions, administrator execution or weakening
+tests. The user reported normal pytest failing with WinError 5 while cleaning
+`.pytest_cache/tmp`, and a fresh temporary-directory run passing. No original
+full traceback, exact fresh-directory command or results count was provided;
+this records reported evidence rather than AI-observed or claimed human
+verification. The exact underlying Windows cause was not established.
+
+**Earlier workaround and rationale:** The milestone-one entry records 137 passes
+and nine setup errors with inaccessible system temp storage, followed by moving
+temporary files to ignored `.pytest_cache/tmp`. That historical entry is
+preserved. Revisited because the fixed location now reportedly fails cleanup.
+Removed only `addopts = "--basetemp=.pytest_cache/tmp"` from pyproject.toml;
+`testpaths = ["tests"]` and all tests remain unchanged. README now describes
+pytest's default per-run system temporary directories and retention/cleanup.
+No replacement override or environment setting was introduced.
+
+**Actual acceptance attempts:** Two executions of
+`.\.venv\Scripts\python.exe -m pytest`, without any basetemp override:
+
+| Run | Result | Exit |
+| --- | --- | --- |
+| First | 159 passed, 34 failed, 42 errors, 2 warnings; 12.81 seconds | 1 |
+| Second | 159 passed, 34 failed, 42 errors, 2 warnings; 12.42 seconds | 1 |
+
+Between these executions, an attempt to redirect the second run to
+`.pytest_cache/pytest-default-run-2.log` was denied before pytest started.
+That shell attempt is not counted as a pytest execution. The second actual
+execution redirected output to `pytest-default-run-2.log` in the repository
+root; its full traceback is preserved there as an untracked diagnostic artifact.
+No inaccessible folder was deleted or modified manually.
+
+**Investigation:** The second traceback contains:
+
+```text
+OSError: could not create numbered dir with prefix pytest- in C:\Users\alex7\AppData\Local\Packages\sandbox.{dfd93ede-42b2-45d0-ac38-0748e48ed52d}\AC\Temp\pytest-of-alex7 after 10 tries
+```
+
+Read-only inspection of installed `_pytest/pathlib.py` shows the numbered-dir
+helper retries mkdir ten times, suppressing each creation exception before
+raising this OSError. Therefore the original mkdir exception is unavailable
+from this traceback; no file-lock/ACL cause is proven. A separate read-only
+Python probe reported an existing sandbox system-temp directory (a different
+sandbox identifier on that tool invocation), with PYTEST_ADDOPTS and
+PYTEST_DEBUG_TEMPROOT both unset. Local HTTP tests additionally encountered
+`[WinError 10013] An attempt was made to access a socket in a way forbidden by
+its access permissions`. This separates current execution restrictions from
+the user's original reported fixed-directory cleanup symptom; it does not
+establish their cause or imply an inspector regression.
+
+Both runs reported two warnings; the preserved second output identifies
+PytestCacheWarning for `cache/nodeids` and `cache/lastfailed`, each with
+`[WinError 183] Cannot create a file when that file already exists` at
+`.pytest_cache\v\cache`. These are cache-write warnings, not evidence that
+default temporary-directory cleanup succeeded. Startup also printed
+`Failed to find real location of C:\Users\alex7\AppData\Local\Python\pythoncore-3.14-64\python.exe`.
+
+**Other actual checks:** Project-local `python -m ruff check .` passed;
+`python -m ruff format --check .` reported 22 files formatted;
+`python -m mypy` passed strict checks in 16 files (exit 0 each). These commands
+also printed the Python-location diagnostic above. `git -c
+safe.directory=C:/Users/alex7/Projects/EndPointCheck diff --check` passed
+(exit 0; normal LF/CRLF notices). The command-scoped Git setting accommodates
+repository ownership without altering global settings.
+
+**Remaining limitations:** The original WinError 5 file-lock/permission cause
+and the current temp-creation cause remain unknown. No workaround was added,
+privileges elevated, permissions changed, tests weakened or commit/push made.
+The requested configuration change is complete, but two successful ordinary
+pytest acceptance runs are not established in this execution environment.
+User review is pending; passing static checks are not proof of correctness.
+
+## 2026-10-06 — User terminal results and temporary-directory fix acceptance
+
+**User-reported terminal evidence:** The user reports successful ordinary pytest
+runs in their own PowerShell terminal without temporary-directory overrides.
+This is separate from the two AI-observed failed agent-environment runs above
+(each exit 1, 159 passed, 34 failed, 42 errors, two warnings). The supplied
+second-manual-run section contains a placeholder rather than an actual final
+pytest summary or numeric exit code. Therefore no manual test counts, durations,
+warning counts or numeric exit codes are recorded or inferred. Successful runs
+are recorded as user-reported evidence, not reruns performed by the AI.
+
+**Interpretation:** Execution-environment differences are a hypothesis that may
+explain the contrasting observations, not a proven cause. The original WinError
+5 cleanup cause and underlying agent temp-creation/file-lock/permission cause
+remain unknown. The error summary above is retained; the full diagnostic
+`pytest-default-run-2.log` remains untracked and excluded from the commit.
+
+**Authorized disposition:** Keep the fixed-basetemp removal and README correction;
+leave testpaths/tests unchanged and add no workaround. The user authorized a
+commit containing only pyproject.toml, README.md and this log, with message
+`fix: use pytest default temporary directory management`. Review the complete
+diff and staged whitespace; leave `examples/manual-invalid.json` and the
+diagnostic log untracked. Do not push. Earlier pending-review statements are
+historical; this authorization permits the scoped commit without claiming
+exhaustive correctness or independently verified human run details.
+
 ## Future entry outline
 
 - Objective and authorized milestone.
