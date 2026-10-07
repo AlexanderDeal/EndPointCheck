@@ -62,6 +62,27 @@ inside inspector would refer to inspector itself. Both processes run as UID
 server. Existing timeout and finite-response limitations still apply; see
 [REQUIREMENTS.md](REQUIREMENTS.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Demonstrate an input error (exit 2)
+
+Build the inspector image first using the build instructions above (or
+`docker compose -p endpointcheck-demo build inspector`). Then run:
+
+```powershell
+docker compose -p endpointcheck-demo run --rm --no-deps inspector validate /app/demo/missing.json
+$inputErrorExit = $LASTEXITCODE
+$inputErrorExit
+```
+
+Expected: a readable missing-file error on stderr and exit **2**, with no endpoint
+checks. `/app/demo/missing.json` is absent from the inspector image. `--no-deps`
+avoids starting the demo API; `--rm` removes the temporary inspector container.
+This demonstrates file-error handling, not malformed JSON validation.
+
+For checking, exit **0** means healthy checks and **1** means degraded checks;
+exit **2** means a configuration/file/invocation error. Successful validation
+also exits 0. A Docker build/startup failure is separate: confirm the error comes
+from EndpointCheck before interpreting the captured code as an application exit.
+
 ## Experiment with the demo
 
 Edit [demo/mixed.json](demo/mixed.json) to see how classification depends on

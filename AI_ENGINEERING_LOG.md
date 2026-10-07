@@ -1098,6 +1098,82 @@ safe.directory=C:/Users/alex7/Projects/EndPointCheck diff --check` passed with
 exit 0. Only README and this log changed; unrelated diagnostic/manual-invalid
 files remain untracked. The requested user review remains pending.
 
+## 2026-10-07 — Document demo configuration experiments
+
+Added a concise DEMO.md section for the user-requested `/slow` threshold change
+(0.2 to 2) and `/error` expected-status change (200 to 500). Outcomes are stated
+as expected under normal demo conditions, not newly measured runs. Either edit
+alone retains other degraded endpoints and exit 1. The section preserves service
+URLs, explains Dockerfile's configuration COPY, and gives the existing project
+name with inspector-only rebuild and a one-line fresh-run command. Restoration
+means manually undoing only deliberate values and rebuilding, preserving other
+work. Configuration, application and tests were not modified.
+
+Read AGENTS, DEMO, mixed configuration, Dockerfile and Compose; checked command
+and expected-classification consistency against these and existing inspector
+behavior. `git diff --check` passed (exit 0). No containers/tests were run for
+this documentation change, and no commit/push was performed. Review is pending.
+
+## 2026-10-07 — Verify and document the missing-file exit-2 demonstration
+
+**Scope:** Add a concise missing-file demonstration to DEMO and record actual
+evidence. No invalid fixture, application/test changes, Dockerfile/Compose
+changes, commit or push. The existing uncommitted experiment-documentation log
+entry above was preserved.
+
+**Environment and preparation:** Approved Docker tool execution reported daemon
+29.8.1 and Compose 5.5.1. Read AGENTS, DEMO, Dockerfile and Compose. A pre-run
+`docker compose -p endpointcheck-demo ps -a` snapshot showed an existing running
+healthy API, stopped mixed inspector and stopped named healthy inspector, with
+an existing Compose network. These resources predated this verification and
+were neither stopped nor removed. `docker compose -p endpointcheck-demo build
+inspector` exited 0 (cached build), using the documented project/service names.
+
+**Image evidence:** Ran `docker compose -p endpointcheck-demo run --rm --no-deps
+--entrypoint python inspector -c "from pathlib import Path;
+p=Path('/app/demo/missing.json'); print('missing.json exists:', p.exists());
+assert not p.exists()"`. Output was `missing.json exists: False`, exit 0.
+No fixture was added and the image check ran under its normal non-root user.
+
+**Exact documented application command:**
+
+```powershell
+docker compose -p endpointcheck-demo run --rm --no-deps inspector validate /app/demo/missing.json
+$inputErrorExit = $LASTEXITCODE
+$inputErrorExit
+```
+
+The captured `$inputErrorExit` printed **2**. The command created its temporary
+inspector successfully and emitted:
+
+```text
+error: Cannot read configuration /app/demo/missing.json: [Errno 2] No such file or directory: '/app/demo/missing.json'
+```
+
+To verify streams separately, repeated the identical Docker argument list with
+Python `subprocess.run(..., capture_output=True, text=True, timeout=30)` in the
+approved context. It returned 2, stdout was empty, stderr contained the exact
+EndpointCheck error above. Diagnostic assertions passed (the capture script
+itself exited 0, distinct from Docker/application exit 2). Docker also emitted
+container-created messages and a warning about the pre-existing named healthy
+container being an orphan. That warning was not mistaken for startup failure;
+the application actually launched and reported its expected file error. No
+broad orphan cleanup was performed.
+
+**Behavior and cleanup evidence:** This is file-error handling, not malformed
+JSON testing. The existing validation path performs no endpoint checks. `--no-deps`
+prevents dependency startup; the pre-existing API remained up, rather than being
+recreated or started for this command. `--rm` removed image-probe and application
+containers; the subsequent Compose snapshot retained only the pre-existing
+resources. No project-wide down or cache/image removal was performed.
+
+**Documentation and checks:** DEMO now explains image build prerequisite,
+missing-file stderr/exit 2, no requests, no-deps/rm, and health exit 0/degraded
+exit 1/input-error exit 2 (validation success also exits 0). Runtime verification
+is complete for this scenario, not pending. `git diff --check` passed, exit 0.
+Only DEMO and this log changed. No full suite was rerun for these documentation
+edits; no claim of manual user verification or exhaustive correctness is made.
+
 ## Future entry outline
 
 - Objective and authorized milestone.
