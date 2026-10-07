@@ -1,64 +1,98 @@
 # EndpointCheck
 
-A small Python command-line API inspector and learning project for AI-assisted
-engineering. **Milestones one through four are implemented:** strict validation,
-single-endpoint GET checking, bounded orchestration, and an installed CLI with
-plain-text reports and health-based exit codes. Milestone five adds Docker
-packaging and a controlled demo API. Local demo tests and Compose configuration
-and container builds/runs are verified for the mixed and all-healthy scenarios. See [DEMO.md](DEMO.md) for the short demonstration and cleanup sequence.
+EndpointCheck is a Python command-line tool for checking API health and request
+latency. It helps developers inspect a list of GET endpoints, identify unexpected
+statuses and slow responses, and use the result in scripts through exit codes.
 
-## Setup (PowerShell, from the repository root)
+It validates configuration before making requests, checks endpoints with a bounded
+thread pool, and reports healthy, slow, failed or timed-out results in configuration
+order. Individual request failures do not cancel unrelated checks.
 
-Tested with Python 3.14.7. Metadata requires Python >=3.14; other versions have
-not been tested. Validation uses only the standard library; checking uses requests.
+## Prerequisites and installation
+
+Requires Python 3.14+. Verified environments used Python 3.14.7 locally and
+3.14.8 in containers. Git is required for cloning. Docker is optional and requires
+Compose with a running Linux-container daemon. Local instructions use Windows
+PowerShell; container execution uses Linux.
+
+Clone the repository and enter it; skip this step if you already have a checkout:
+
+```powershell
+git clone https://github.com/AlexanderDeal/EndPointCheck.git
+cd EndPointCheck
+```
+
+From the repository root, create a project-local environment and install the tool
+and development checks:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-The development extra installs tested pytest, Ruff, and mypy versions. Using the
-environment executable avoids shell activation.
+This creates `.venv\Scripts\endpointcheck.exe` and installs pytest, Ruff and mypy.
+The explicit executable paths avoid shell activation. With the environment active,
+use `endpointcheck` directly. Checking uses requests; configuration validation
+uses the standard library and performs no DNS lookups or network requests.
 
-Installation also creates `.venv\Scripts\endpointcheck.exe`. With the environment
-active, use `endpointcheck` directly. Reinstall after project metadata changes.
+## Configuration
 
-## Validate
+Use a UTF-8 JSON file. For example:
 
-```powershell
-.\.venv\Scripts\python.exe -m endpointcheck validate examples/config.json
-.\.venv\Scripts\endpointcheck.exe validate examples/config.json
+```json
+{
+  "max_workers": 2,
+  "endpoints": [
+    {
+      "name": "local-health",
+      "url": "http://localhost:8000/health",
+      "expected_status": 200,
+      "latency_threshold_seconds": 0.5,
+      "connect_timeout_seconds": 1.0,
+      "read_timeout_seconds": 2.0
+    }
+  ]
+}
 ```
 
-Expected output: `Configuration valid: 1 endpoint(s).` Exit 0 means valid.
-Expected configuration/file/invocation errors print to stderr without a traceback
-and exit 2. Paths resolve from the current working directory; quote paths with
-spaces. With the environment active, use
-`python -m endpointcheck validate CONFIG_PATH`.
+`max_workers` must be a positive integer, and `endpoints` must be nonempty. Each
+endpoint requires every field shown. Names must be unique (case-sensitive),
+nonblank and free of leading/trailing whitespace. URLs require HTTP/HTTPS and a
+hostname; credentials, fragments, whitespace and invalid ports are rejected.
+Expected statuses range from 100 through 599; timing values must be positive and
+finite. Booleans are not accepted as numbers.
 
-Validation reads a UTF-8 file and checks every endpoint before returning settings.
-It does not resolve hostnames or contact endpoints. The sample localhost URL
-requires no running server. See [REQUIREMENTS.md](REQUIREMENTS.md) for the exact
-schema, examples, and acceptance criteria.
+Missing/unknown fields, duplicate JSON keys and nonstandard constants are rejected.
+Values are not repaired or given defaults. The threshold may exceed either timeout.
+See [REQUIREMENTS.md](REQUIREMENTS.md) for the full contract.
 
-## Check and report
+[examples/config.json](examples/config.json) is ready to validate. Checking its
+localhost URL requires your own API on port 8000; validation requires no server.
+
+## Validate and check
+
+For a self-contained demonstration that requires no existing API, follow the
+Docker quick start in [DEMO.md](DEMO.md).
 
 ```powershell
-.\.venv\Scripts\endpointcheck.exe check CONFIG_PATH
-.\.venv\Scripts\python.exe -m endpointcheck check CONFIG_PATH
+.\.venv\Scripts\endpointcheck.exe validate examples/config.json
+.\.venv\Scripts\endpointcheck.exe check examples/config.json
 .\.venv\Scripts\endpointcheck.exe --help
 ```
 
-Both entry points were verified against controlled local HTTP configurations.
-Replace `CONFIG_PATH` with your JSON file. The sample config targets localhost
-port 8000; checking it requires your own API there (validation does not).
+Validation prints `Configuration valid: 1 endpoint(s).` for this example.
+Equivalent module commands are:
 
-Checks validate the whole file before sending requests and print a completed
-report on stdout in configuration order. Exit 0 means all healthy; exit 1 means
-at least one slow/failed/timed-out result. Input/file/invocation errors use stderr
-and exit 2. Unexpected programming errors remain visible.
+```powershell
+.\.venv\Scripts\python.exe -m endpointcheck validate examples/config.json
+.\.venv\Scripts\python.exe -m endpointcheck check examples/config.json
+```
 
-Illustrative report; actual measured durations vary:
+Replace the path with your configuration. Relative paths resolve from the current
+working directory; quote paths containing spaces. Checks validate the entire file
+before sending requests. Redirects are not followed.
+
+Example report (illustrative elapsed time):
 
 ```text
 local-health [healthy]
@@ -69,15 +103,37 @@ local-health [healthy]
 Summary: healthy=1, slow=0, failed=0, timed out=0
 ```
 
-Unavailable statuses display `unavailable`; errors are included when present.
-Summary counts always include all four outcomes. Display time is rounded to
-three decimals; classification uses the existing unrounded result. Names, URLs,
-and errors escape nonprintable characters and literal backslashes; body content
-is not printed. Reports use no color, JSON output, or new dependencies.
+Reports go to stdout. They include errors when present and show `unavailable` when
+no HTTP status arrived. A received status is preserved after a body failure or
+timeout. Bodies are not printed. Control characters are escaped.
 
-## Verify
+Elapsed time is measured with a monotonic clock and includes complete body
+consumption or time until a request error. Worker queue time is excluded.
+Display rounding to three decimals does not change classification.
 
-These commands were run successfully in the project-local environment:
+| Exit | Meaning |
+| --- | --- |
+| 0 | Configuration valid (`validate`), or all endpoints healthy (`check`). |
+| 1 | Completed checks include a slow, failed or timed-out result. |
+| 2 | Configuration, file or invocation error; error is written to stderr. |
+
+Unexpected programming exceptions remain visible.
+
+## Docker demonstration
+
+See [DEMO.md](DEMO.md) for build, mixed/healthy runs, exit-code inspection and
+project-scoped cleanup commands. The mixed demo exits 1 with one of each outcome;
+the all-healthy demo exits 0.
+
+The demo runs Linux containers separately from the local Windows environment.
+Inspector uses the installed CLI and exits after reporting. Both processes run as
+UID 10001. API URLs use `http://demo-api:8000` on the Compose network; localhost
+inside inspector would refer to inspector itself. No host ports are published.
+A dedicated health check gates startup, without guaranteeing later availability.
+
+## Development checks
+
+Run from the repository root after installing the development extra:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
@@ -86,100 +142,30 @@ These commands were run successfully in the project-local environment:
 .\.venv\Scripts\python.exe -m mypy
 ```
 
-pytest manages per-run temporary directories under the system temporary location
-by default, including retention and cleanup of older runs. No fixed `basetemp`
-is configured. Pytest's separate persistent cache uses `.pytest_cache_probe`,
-ignored by Git. This cache-location workaround avoids the old `.pytest_cache`
-access problem; its underlying cause remains unknown. Two user terminal probes
-passed all 235 tests without warnings (the supplied second transcript shows
-exit 0). The old cache is preserved and no Windows permissions were changed.
-Ordinary pytest with this configuration was also verified through the approved
-outside-sandbox execution path: 235 passed, no warnings, exit 0. Restricted
-agent execution previously had separate temp/socket access failures.
-Strict mypy checks application, demo API and tests. Tests include raw
-duplicate-key JSON, field boundaries, whole-config rejection, subprocess CLI
-behavior, and guarded socket/DNS calls. Checks provide evidence, not proof of
-correctness or an exhaustive network audit.
+HTTP tests use controlled local servers and require temporary-file access and
+loopback socket binding/connections. No public API is needed. Mypy checks the
+inspector, demo API and tests in strict mode.
 
-Checker tests use a controlled loopback server with clean fixture shutdown:
-statuses, redirects, delayed headers/body, incomplete downloads, refusal, and
-regularly arriving data. Connection timeout is simulated; exact latency equality
-uses a controlled clock. No public endpoint is needed.
+## Limitations
 
-Runner tests also use a concurrent local server with lock-protected handler
-counters, plus simulated checks and synchronization events for worker limits,
-overlap, ordering, failure isolation, and queue-time exclusion. Server counters
-observe request handlers rather than all client activity stages.
+- There is no total wall-clock deadline or response-size cap. Checks target small,
+  finite responses; connection/read-inactivity timeouts do not bound total duration.
+  Regularly arriving data can keep a response running beyond either timeout.
+- No retries or forced thread cancellation. Shutdown may wait for running/queued
+  checks; queued-task memory grows with endpoint count.
+- TLS/proxy behavior and unusual console encodings are not comprehensively tested.
+- URL syntax checks do not establish that a host exists. Display escaping does
+  not redact query data or errors.
+- The demo API lacks graceful SIGTERM handling and may exit 137 when Compose stops
+  it. This is separate from inspector health exit codes.
+- Image tags and transitive dependencies are not fully locked; identical rebuilds
+  are not guaranteed.
 
-Reporting tests cover exact output, safe display, and rounding without changing
-outcomes. Subprocess tests run the actual installed launcher and module entry
-point from outside the repository root, compare behavior (excluding measured
-durations), and observe zero server requests for invalid files and validation.
-
-## Single-endpoint checker (Python API)
-
-`endpointcheck.checker.check_endpoint(endpoint)` takes one validated
-`EndpointSettings` and returns a `CheckResult` containing name, URL, outcome,
-elapsed seconds, optional status, and optional error. It does not print or retry.
-The checking CLI calls the existing runner; validation remains network-free.
-
-The checker streams the complete body and closes response/session resources,
-including after a body error. A received status is preserved even when body
-consumption fails. Separate connection/read-inactivity timeouts are not a total
-deadline: regularly arriving data can finish slowly without a read timeout.
-Elapsed time includes the whole body, using a monotonic clock. Small finite API
-responses remain the intended use, without an enforced size/duration cap.
-
-## Concurrent runner (Python API)
-
-`endpointcheck.runner.run_checks(settings)` accepts validated `Settings`, submits
-all endpoints using `max_workers`, and returns one result per endpoint in
-configuration order for ordinary request outcomes. Workers start queued checks
-as capacity becomes available. Collection stays on the calling thread (normally
-the main thread); the runner does not print or format reports.
-
-Failed/timed-out results do not cancel other checks. Programming exceptions
-remain visible; executor shutdown may wait for running and queued checks before
-they propagate. There is no total deadline or forced thread cancellation.
-All endpoints are submitted at once, so queued-future memory grows with endpoint
-count. The validation CLI still performs no HTTP checks.
-
-## Docker demonstration
-
-The two services use a private Compose network, with no published host ports.
-Inspector uses the installed CLI and exits after reporting. Demo configurations
-are `demo/mixed.json` (expected exit 1) and `demo/all-healthy.json` (expected exit
-0); their URLs use `demo-api:8000`, so they are intended for Compose networking.
-The API health check gates startup, without guaranteeing later availability.
-
-Actually verified commands in this environment:
-
-```powershell
-docker --version
-docker compose version
-docker info
-docker compose -p endpointcheck-m5-review config --quiet
-.\.venv\Scripts\python.exe -m pytest tests/test_demo_api.py -s
-```
-
-The daemon was initially unavailable; subsequent runtime verification used
-Docker 29.8.1, Compose 5.5.1 and Python 3.14.8 Linux containers. The build, two
-mixed runs, healthy run and project-scoped container/network cleanup commands
-in [DEMO.md](DEMO.md) were then verified. Actual inspector exits were 1, 1 and 0.
-Readiness timestamps preceded inspector execution; service-name DNS and live
-UID 10001 processes were observed. Normal package installation was confirmed
-from outside the image source directory. No Docker installation or machine
-settings changes were needed. Local tests independently verify endpoint behavior.
-
-## Documentation
+## Supporting documentation
 
 - [REQUIREMENTS.md](REQUIREMENTS.md): behavior and acceptance criteria.
-- [ARCHITECTURE.md](ARCHITECTURE.md): implemented/planned components and tradeoffs.
+- [ARCHITECTURE.md](ARCHITECTURE.md): components, Python APIs and design tradeoffs.
+- [DEMO.md](DEMO.md): controlled Docker demonstration.
 - [AGENTS.md](AGENTS.md): repository working instructions.
-- [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md): recommendations, explicit user
-  decisions, verification evidence, and limitations.
-
-Milestone five is accepted; controlled container scenarios are verified. HTTP timeouts
-do not enforce a total deadline; the small/finite-response usage limitation is
-recorded in requirements. TLS/proxy behavior and unusual console encodings remain
-incompletely tested.
+- [AI_ENGINEERING_LOG.md](AI_ENGINEERING_LOG.md): development history, decisions,
+  verification evidence and limitations.

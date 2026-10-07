@@ -1056,6 +1056,48 @@ permanent access across all execution contexts. Historical investigation entries
 are preserved. No old cache deletion, permission change, permanent sandbox
 change, application/test modification, commit or push occurred.
 
+## 2026-10-07 — Rewrite README as a user guide
+
+**User request and scope:** Describe EndpointCheck as a completed usable tool;
+retain purpose, prerequisites/install, configuration/example, commands, output,
+exit codes, Docker guidance, development checks, limitations and document links.
+Remove milestone/authorization language and chronological verification/cache
+history. No code/tests/configuration changes, full-suite rerun, commit or push.
+
+**Documentation review:** Read AGENTS.md, README, pyproject.toml, REQUIREMENTS,
+ARCHITECTURE and DEMO. Inspected CLI/module entry points, checker, runner,
+formatter, example configuration, Compose file and Dockerfile. Metadata confirms
+Python >=3.14, the installed script and development extra. Existing source
+confirms validate/check syntax, statuses, report layout and exit codes; Compose
+and DEMO confirm service-name URLs, readiness, non-root Linux execution and
+project-scoped commands. The README's inline JSON follows the existing validated
+schema; its example duration is explicitly illustrative.
+
+**Changes:** Replaced README's development narrative with an operating guide.
+Retained the existing recorded PowerShell installation, installed/module CLI and
+pytest/Ruff/mypy commands; linked DEMO for build/run/exit-inspection/cleanup rather
+than duplicating it. Added a compact valid JSON example and exit-code table.
+Distinguished local Windows setup from Linux containers and documented HTTP
+tests' temp/loopback access needs. Retained timeout/body/queue boundaries,
+finite-response scope, failure isolation, status evidence, lack of retries/forced
+cancellation, and current TLS/proxy/console/image-locking/shutdown limitations.
+
+**Historical evidence preservation:** Removed README's milestone status,
+chronological Docker availability/build accounts, cache troubleshooting and
+repeated verification claims. Their evidence already exists in the installation,
+CLI/runner, Docker runtime and 2026-10-06 cache/environment entries above,
+including commands, versions, outcomes and manual-versus-AI attribution.
+No previously unrecorded historical run evidence was identified for relocation;
+historical log entries were not rewritten. Python API implementation detail is
+left in architecture rather than repeated in the user guide.
+
+**Verification:** Commands were checked against existing source/metadata and
+recorded execution evidence, not rerun for this prose-only change. No full suite
+or installation/build/network command was run. `git -c
+safe.directory=C:/Users/alex7/Projects/EndPointCheck diff --check` passed with
+exit 0. Only README and this log changed; unrelated diagnostic/manual-invalid
+files remain untracked. The requested user review remains pending.
+
 ## Future entry outline
 
 - Objective and authorized milestone.
